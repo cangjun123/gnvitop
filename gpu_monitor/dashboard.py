@@ -1,4 +1,6 @@
-<!DOCTYPE html>
+"""Embedded dashboard HTML."""
+
+DASHBOARD_HTML = r"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -409,61 +411,10 @@ function renderHosts(hosts) {
   }).join('') + '</div>';
 }
 
-// Demo data for GitHub Pages static deployment
-const DEMO_DATA = {
-  hosts: [
-    {
-      alias: "server-01", hostname: "192.168.1.101", user: "admin", port: 22,
-      status: "ok", error: null,
-      gpus: [
-        { index: 0, name: "NVIDIA A100 80GB", memory_total_mb: 81920, memory_used_mb: 32768, memory_free_mb: 49152, memory_usage_pct: 40.0, gpu_utilization_pct: 65, temperature_c: 52 },
-        { index: 1, name: "NVIDIA A100 80GB", memory_total_mb: 81920, memory_used_mb: 8192, memory_free_mb: 73728, memory_usage_pct: 10.0, gpu_utilization_pct: 5, temperature_c: 38 }
-      ]
-    },
-    {
-      alias: "server-02", hostname: "192.168.1.102", user: "admin", port: 22,
-      status: "ok", error: null,
-      gpus: [
-        { index: 0, name: "NVIDIA RTX 4090", memory_total_mb: 24576, memory_used_mb: 22118, memory_free_mb: 2458, memory_usage_pct: 90.0, gpu_utilization_pct: 95, temperature_c: 78 },
-        { index: 1, name: "NVIDIA RTX 4090", memory_total_mb: 24576, memory_used_mb: 4915, memory_free_mb: 19661, memory_usage_pct: 20.0, gpu_utilization_pct: 12, temperature_c: 42 }
-      ]
-    },
-    {
-      alias: "server-03", hostname: "192.168.1.103", user: "admin", port: 22,
-      status: "ok", error: null,
-      gpus: [
-        { index: 0, name: "NVIDIA V100 32GB", memory_total_mb: 32768, memory_used_mb: 0, memory_free_mb: 32768, memory_usage_pct: 0, gpu_utilization_pct: 0, temperature_c: 31 },
-        { index: 1, name: "NVIDIA V100 32GB", memory_total_mb: 32768, memory_used_mb: 16384, memory_free_mb: 16384, memory_usage_pct: 50.0, gpu_utilization_pct: 45, temperature_c: 58 },
-        { index: 2, name: "NVIDIA V100 32GB", memory_total_mb: 32768, memory_used_mb: 28672, memory_free_mb: 4096, memory_usage_pct: 87.5, gpu_utilization_pct: 88, temperature_c: 71 },
-        { index: 3, name: "NVIDIA V100 32GB", memory_total_mb: 32768, memory_used_mb: 6554, memory_free_mb: 26214, memory_usage_pct: 20.0, gpu_utilization_pct: 8, temperature_c: 35 }
-      ]
-    },
-    {
-      alias: "server-04", hostname: "192.168.1.104", user: "admin", port: 22,
-      status: "no_gpu", error: "No NVIDIA GPU found or nvidia-smi not available", gpus: []
-    },
-    {
-      alias: "server-05", hostname: "192.168.1.105", user: "admin", port: 22,
-      status: "error", error: "Connection timed out", gpus: []
-    }
-  ],
-  updated_at: Date.now() / 1000
-};
-
-let isDemo = false;
-
-async function fetchData(force = false) {
-  try {
-    const url = force ? '/api/refresh' : '/api/gpus';
-    const resp = await fetch(url);
-    const data = await resp.json();
-    return data;
-  } catch (e) {
-    // No backend available (e.g. GitHub Pages), use demo data
-    isDemo = true;
-    DEMO_DATA.updated_at = Date.now() / 1000;
-    return DEMO_DATA;
-  }
+async function fetchData(force) {
+  const url = force ? '/api/refresh' : '/api/gpus';
+  const resp = await fetch(url);
+  return await resp.json();
 }
 
 async function refresh() {
@@ -485,9 +436,7 @@ async function refresh() {
 
 function updateTime(ts) {
   const d = new Date(ts * 1000);
-  const prefix = isDemo ? '[Demo] ' : '';
-  document.getElementById('update-time').textContent =
-    prefix + 'Updated: ' + d.toLocaleTimeString();
+  document.getElementById('update-time').textContent = 'Updated: ' + d.toLocaleTimeString();
 }
 
 async function init() {
@@ -504,27 +453,25 @@ async function init() {
 
 function setupAutoRefresh() {
   const checkbox = document.getElementById('auto-refresh');
+  function doRefresh() {
+    fetchData(false).then(data => {
+      renderSummary(data.hosts);
+      renderHosts(data.hosts);
+      updateTime(data.updated_at);
+    }).catch(() => {});
+  }
   checkbox.addEventListener('change', () => {
     if (checkbox.checked) {
-      autoRefreshTimer = setInterval(() => fetchData(false).then(data => {
-        renderSummary(data.hosts);
-        renderHosts(data.hosts);
-        updateTime(data.updated_at);
-      }), 30000);
+      autoRefreshTimer = setInterval(doRefresh, 30000);
     } else {
       clearInterval(autoRefreshTimer);
     }
   });
-  // Start auto-refresh
-  autoRefreshTimer = setInterval(() => fetchData(false).then(data => {
-    renderSummary(data.hosts);
-    renderHosts(data.hosts);
-    updateTime(data.updated_at);
-  }), 30000);
+  autoRefreshTimer = setInterval(doRefresh, 30000);
 }
 
 init();
 setupAutoRefresh();
 </script>
 </body>
-</html>
+</html>"""
