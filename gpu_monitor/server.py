@@ -1,31 +1,39 @@
 #!/usr/bin/env python3
-"""GPU Monitor - 读取 SSH config，查询远程主机 GPU 使用情况"""
+"""GPU Monitor - Flask server that reads SSH config and queries remote GPUs."""
 
 import os
 import re
-import json
 import time
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from flask import Flask, jsonify, send_file
+
+from flask import Flask, jsonify, Response
 import paramiko
+
+from . import __version__
+from .dashboard import DASHBOARD_HTML
 
 app = Flask(__name__)
 
 SSH_CONFIG_PATH = os.path.expanduser("~/.ssh/config")
-SSH_TIMEOUT = 8  # seconds
-GPU_QUERY_CMD = "nvidia-smi --query-gpu=index,name,memory.total,memory.used,memory.free,utilization.gpu,temperature.gpu --format=csv,noheader,nounits 2>/dev/null"
+SSH_TIMEOUT = 8
+GPU_QUERY_CMD = (
+    "nvidia-smi --query-gpu=index,name,memory.total,memory.used,memory.free,"
+    "utilization.gpu,temperature.gpu --format=csv,noheader,nounits 2>/dev/null"
+)
 
-# Cache
 cache = {"data": [], "last_update": 0}
 cache_lock = threading.Lock()
-CACHE_TTL = 30  # seconds
+CACHE_TTL = 30
 
 
 def parse_ssh_config(path):
-    """解析 ~/.ssh/config，返回主机列表"""
+    """Parse ~/.ssh/config and return a list of hosts."""
     hosts = []
     current = None
+
+    if not os.path.exists(path):
+        return hosts
 
     with open(path, "r") as f:
         for line in f:
@@ -40,11 +48,16 @@ def parse_ssh_config(path):
             key, value = key_match.group(1), key_match.group(2)
 
             if key.lower() == "host":
-                # 跳过通配符
                 if "*" in value or "?" in value:
                     current = None
                     continue
-                current = {"alias": value, "hostname": None, "user": None, "port": 22, "identity_file": None}
+                current = {
+                    "alias": value,
+                    "hostname": None,
+                    "user": None,
+                    "port": 22,
+                    "identity_file": None,
+                }
                 hosts.append(current)
             elif current is not None:
                 if key.lower() == "hostname":
@@ -60,7 +73,7 @@ def parse_ssh_config(path):
 
 
 def query_gpu(host_info):
-    """SSH 连接到主机并查询 GPU 信息"""
+    """SSH into a host and query GPU information."""
     alias = host_info["alias"]
     hostname = host_info["hostname"] or alias
     user = host_info["user"]
@@ -69,7 +82,7 @@ def query_gpu(host_info):
     result = {
         "alias": alias,
         "hostname": hostname,
-        "user": user,
+        "user": user or "unknown",
         "port": port,
         "status": "error",
         "error": None,
@@ -97,7 +110,6 @@ def query_gpu(host_info):
 
         stdin, stdout, stderr = client.exec_command(GPU_QUERY_CMD, timeout=SSH_TIMEOUT)
         output = stdout.read().decode("utf-8").strip()
-        err_output = stderr.read().decode("utf-8").strip()
 
         if not output:
             result["status"] = "no_gpu"
@@ -133,28 +145,30 @@ def query_gpu(host_info):
     except paramiko.AuthenticationException:
         result["error"] = "Authentication failed"
     except paramiko.SSHException as e:
-        result["error"] = f"SSH error: {str(e)}"
+        result["error"] = f"SSH error: {e}"
     except TimeoutError:
         result["error"] = "Connection timed out"
     except OSError as e:
-        result["error"] = f"Connection failed: {str(e)}"
+        result["error"] = f"Connection failed: {e}"
     except Exception as e:
-        result["error"] = f"{type(e).__name__}: {str(e)}"
+        result["error"] = f"{type(e).__name__}: {e}"
 
     return result
 
 
 def fetch_all_gpu_info():
-    """并发查询所有主机的 GPU 信息"""
+    """Query all hosts concurrently."""
     hosts = parse_ssh_config(SSH_CONFIG_PATH)
     results = []
+
+    if not hosts:
+        return results
 
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = {executor.submit(query_gpu, h): h for h in hosts}
         for future in as_completed(futures):
             results.append(future.result())
 
-    # 按状态排序: ok > no_gpu > error
     order = {"ok": 0, "no_gpu": 1, "error": 2}
     results.sort(key=lambda x: (order.get(x["status"], 3), x["alias"]))
     return results
@@ -162,7 +176,7 @@ def fetch_all_gpu_info():
 
 @app.route("/")
 def index():
-    return send_file("index.html")
+    return Response(DASHBOARD_HTML, mimetype="text/html")
 
 
 @app.route("/api/gpus")
@@ -177,13 +191,7 @@ def api_gpus():
 
 @app.route("/api/refresh")
 def api_refresh():
-    """强制刷新"""
     with cache_lock:
         cache["data"] = fetch_all_gpu_info()
         cache["last_update"] = time.time()
         return jsonify({"hosts": cache["data"], "updated_at": cache["last_update"]})
-
-
-if __name__ == "__main__":
-    print("GPU Monitor starting on http://localhost:5050")
-    app.run(host="0.0.0.0", port=5050, debug=False)

@@ -1,4 +1,6 @@
-<!DOCTYPE html>
+"""Embedded dashboard HTML."""
+
+DASHBOARD_HTML = r"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -409,11 +411,10 @@ function renderHosts(hosts) {
   }).join('') + '</div>';
 }
 
-async function fetchData(force = false) {
+async function fetchData(force) {
   const url = force ? '/api/refresh' : '/api/gpus';
   const resp = await fetch(url);
-  const data = await resp.json();
-  return data;
+  return await resp.json();
 }
 
 async function refresh() {
@@ -435,8 +436,7 @@ async function refresh() {
 
 function updateTime(ts) {
   const d = new Date(ts * 1000);
-  document.getElementById('update-time').textContent =
-    'Updated: ' + d.toLocaleTimeString();
+  document.getElementById('update-time').textContent = 'Updated: ' + d.toLocaleTimeString();
 }
 
 async function init() {
@@ -453,27 +453,25 @@ async function init() {
 
 function setupAutoRefresh() {
   const checkbox = document.getElementById('auto-refresh');
+  function doRefresh() {
+    fetchData(false).then(data => {
+      renderSummary(data.hosts);
+      renderHosts(data.hosts);
+      updateTime(data.updated_at);
+    }).catch(() => {});
+  }
   checkbox.addEventListener('change', () => {
     if (checkbox.checked) {
-      autoRefreshTimer = setInterval(() => fetchData(false).then(data => {
-        renderSummary(data.hosts);
-        renderHosts(data.hosts);
-        updateTime(data.updated_at);
-      }), 30000);
+      autoRefreshTimer = setInterval(doRefresh, 30000);
     } else {
       clearInterval(autoRefreshTimer);
     }
   });
-  // Start auto-refresh
-  autoRefreshTimer = setInterval(() => fetchData(false).then(data => {
-    renderSummary(data.hosts);
-    renderHosts(data.hosts);
-    updateTime(data.updated_at);
-  }), 30000);
+  autoRefreshTimer = setInterval(doRefresh, 30000);
 }
 
 init();
 setupAutoRefresh();
 </script>
 </body>
-</html>
+</html>"""
