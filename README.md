@@ -1,6 +1,7 @@
 # gnvitop
 
 **Global nvitop** -- a web-based GPU monitoring dashboard that monitors **all** your remote GPU servers from a single page.
+![Uploading 960cd5fae22199ece06060e7ec8862a4.jpg…]()
 
 Like [nvitop](https://github.com/XuehaiPan/nvitop), but for **all your servers at once**, displayed as a beautiful web dashboard.
 
