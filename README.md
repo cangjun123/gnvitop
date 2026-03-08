@@ -1,90 +1,93 @@
-# GPU Monitor
+# gnvitop
 
-A web-based GPU monitoring dashboard for remote servers via SSH. Like `nvitop`, but as a web dashboard that reads your `~/.ssh/config` and monitors all your GPU servers in one page.
+**Global nvitop** -- a web-based GPU monitoring dashboard that monitors **all** your remote GPU servers from a single page.
 
-![Python](https://img.shields.io/badge/python-3.7+-blue) ![PyPI](https://img.shields.io/badge/pip_install-gpu--monitor-green)
+Like [nvitop](https://github.com/XuehaiPan/nvitop), but for **all your servers at once**, displayed as a beautiful web dashboard.
 
-## Install
-
-```bash
-pip install gpu-monitor
+```
+pip install gnvitop
+gnvitop
 ```
 
-Or install from source:
+## How It Works
+
+1. Reads your `~/.ssh/config` automatically
+2. SSH into each server and runs `nvidia-smi`
+3. Displays everything in a real-time web dashboard
+4. Auto-refreshes every 30 seconds
+
+```
+                          ┌──> Server A (nvidia-smi) ──> 4x A100
+gnvitop ──> Browser ──>  ├──> Server B (nvidia-smi) ──> 8x V100
+                          ├──> Server C (nvidia-smi) ──> 2x RTX 4090
+                          └──> Server D ──> offline
+```
+
+## Installation
 
 ```bash
-git clone https://github.com/Linwei94/GPU-monitor.git
-cd GPU-monitor
-pip install .
+pip install gnvitop
 ```
 
 ## Usage
 
 ```bash
-gpu-monitor
+gnvitop                              # start and auto-open browser
+gnvitop -p 8080                      # custom port
+gnvitop --host 0.0.0.0              # expose to LAN
+gnvitop --no-browser                 # don't auto-open browser
+gnvitop --ssh-config /path/to/config # custom SSH config
+gnvitop -v                           # show version
 ```
 
-That's it. The browser will open automatically at `http://127.0.0.1:5050`.
-
-### Options
-
-```
-gpu-monitor                        # Start with defaults
-gpu-monitor -p 8080                # Custom port
-gpu-monitor --host 0.0.0.0        # Expose to network
-gpu-monitor --no-browser           # Don't auto-open browser
-gpu-monitor --ssh-config /path/to/config  # Custom SSH config path
-```
-
-You can also run it as a Python module:
+Or run as a module:
 
 ```bash
-python -m gpu_monitor
+python -m gnvitop
 ```
 
 ## Prerequisites
 
-- `~/.ssh/config` with your server entries
-- SSH key-based authentication set up
-- `nvidia-smi` installed on remote servers
-
-### SSH Config Example
+1. **SSH config** -- your `~/.ssh/config` should have server entries:
 
 ```
 Host gpu-server-01
     HostName 192.168.1.101
-    User admin
-    Port 22
+    User alice
     IdentityFile ~/.ssh/id_rsa
 
 Host gpu-server-02
     HostName 192.168.1.102
-    User admin
+    User bob
 ```
 
-All hosts in your SSH config will be queried for GPU information.
+2. **SSH key auth** -- password-less login should be set up
+3. **nvidia-smi** -- must be installed on the remote servers
 
 ## Features
 
-- Auto-reads `~/.ssh/config` - zero configuration
-- Auto-opens browser on start
-- Real-time monitoring with 30s auto-refresh
-- Concurrent SSH queries (10 workers) with caching
-- Summary: online hosts, total GPUs, idle GPUs, free memory
-- Color-coded: green = online, yellow = no GPU, red = offline
-- GPU utilization & memory progress bars
-- Temperature monitoring with alerts
-- Dark-themed responsive UI
+- **Zero config** -- reads `~/.ssh/config` automatically, no setup needed
+- **One command** -- `pip install gnvitop && gnvitop`, that's it
+- **Auto browser** -- opens dashboard in your browser on start
+- **Real-time** -- 30s auto-refresh with manual refresh button
+- **Concurrent** -- queries all servers in parallel (10 workers)
+- **Cached** -- 30s cache to avoid hammering your servers
+- **Dark UI** -- clean, responsive dark-themed dashboard
+- **At a glance** -- summary bar shows online hosts, total GPUs, idle GPUs, free memory
+- **Color coded** -- green (online), yellow (no GPU), red (offline)
+- **GPU details** -- utilization bars, memory bars, temperature with color alerts
 
-## Architecture
+## Comparison with nvitop
 
-```
-pip install gpu-monitor && gpu-monitor
+| Feature | nvitop | gnvitop |
+|---------|--------|---------|
+| Monitor local GPU | Yes | No |
+| Monitor remote GPUs | No | Yes |
+| Multiple servers | No | Yes |
+| Interface | Terminal | Web browser |
+| Setup | Run on each server | Run once, reads SSH config |
 
-    Browser ──> Flask (localhost:5050) ──SSH──> Server 1 (nvidia-smi)
-                                       ──SSH──> Server 2 (nvidia-smi)
-                                       ──SSH──> Server N (nvidia-smi)
-```
+**gnvitop** is not a replacement for nvitop -- it's a complement. Use nvitop for detailed local GPU monitoring, use gnvitop to get an overview of all your GPU servers from one place.
 
 ## License
 
