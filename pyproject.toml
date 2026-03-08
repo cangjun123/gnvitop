@@ -32,6 +32,6 @@ dependencies = [
 gnvitop = "gnvitop.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/Linwei94/GPU-monitor"
-Repository = "https://github.com/Linwei94/GPU-monitor"
-Issues = "https://github.com/Linwei94/GPU-monitor/issues"
+Homepage = "https://github.com/Linwei94/gnvitop"
+Repository = "https://github.com/Linwei94/gnvitop"
+Issues = "https://github.com/Linwei94/gnvitop/issues"
