@@ -269,7 +269,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 <body>
 
 <div class="header">
-  <h1>GPU Monitor</h1>
+  <h1>gnvitop -- global nvitop, monitoring GPU usage across all your remote servers</h1>
   <div class="header-right">
     <span class="status-text" id="update-time"></span>
     <label class="auto-refresh-toggle">
