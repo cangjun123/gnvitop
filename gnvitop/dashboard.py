@@ -19,10 +19,9 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 
   .header {
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
     align-items: center;
     margin-bottom: 28px;
-    flex-wrap: wrap;
     gap: 12px;
   }
 
@@ -31,6 +30,8 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     font-weight: 700;
     color: #f1f5f9;
     letter-spacing: -0.5px;
+    text-align: center;
+    width: 100%;
   }
 
   .header-right {
@@ -269,7 +270,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 <body>
 
 <div class="header">
-  <h1>gnvitop -- global nvitop, monitoring GPU usage across all your remote servers</h1>
+  <h1>gnvitop</h1>
   <div class="header-right">
     <span class="status-text" id="update-time"></span>
     <label class="auto-refresh-toggle">
