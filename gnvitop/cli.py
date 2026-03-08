@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
-"""CLI entry point for gpu-monitor."""
+"""CLI entry point for gnvitop."""
 
 import argparse
 import os
-import sys
 import webbrowser
 import threading
 
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="gpu-monitor",
-        description="Web-based GPU monitoring dashboard for remote servers via SSH.",
+        prog="gnvitop",
+        description="Global nvitop: web-based GPU monitoring dashboard for remote servers via SSH.",
     )
     parser.add_argument(
         "-p", "--port",
@@ -34,14 +33,25 @@ def main():
         default=None,
         help="Path to SSH config file (default: ~/.ssh/config)",
     )
+    parser.add_argument(
+        "-v", "--version",
+        action="store_true",
+        help="Show version and exit",
+    )
 
     args = parser.parse_args()
+
+    from . import __version__
+
+    if args.version:
+        print(f"gnvitop {__version__}")
+        return
 
     # Check SSH config exists
     ssh_config = args.ssh_config or os.path.expanduser("~/.ssh/config")
     if not os.path.exists(ssh_config):
         print(f"Warning: SSH config not found at {ssh_config}")
-        print("GPU Monitor will start but no hosts will be queried.")
+        print("gnvitop will start but no hosts will be queried.")
         print("Create ~/.ssh/config or use --ssh-config to specify a path.\n")
 
     # Set custom SSH config path if provided
@@ -52,7 +62,7 @@ def main():
     from .server import app
 
     url = f"http://{args.host}:{args.port}"
-    print(f"GPU Monitor v{_get_version()} starting on {url}")
+    print(f"gnvitop v{__version__} starting on {url}")
     print(f"Reading SSH config from: {ssh_config}")
     print("Press Ctrl+C to stop.\n")
 
@@ -60,11 +70,6 @@ def main():
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
 
     app.run(host=args.host, port=args.port, debug=False)
-
-
-def _get_version():
-    from . import __version__
-    return __version__
 
 
 if __name__ == "__main__":

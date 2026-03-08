@@ -3,16 +3,16 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "gpu-monitor"
+name = "gnvitop"
 version = "0.1.0"
-description = "Web-based GPU monitoring dashboard for remote servers via SSH"
+description = "Global nvitop: web-based GPU monitoring dashboard for all your remote servers via SSH"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.7"
 authors = [
     {name = "Linwei94"},
 ]
-keywords = ["gpu", "monitor", "nvidia", "ssh", "dashboard"]
+keywords = ["gpu", "monitor", "nvidia", "ssh", "nvitop", "dashboard", "nvidia-smi"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
@@ -29,8 +29,9 @@ dependencies = [
 ]
 
 [project.scripts]
-gpu-monitor = "gpu_monitor.cli:main"
+gnvitop = "gnvitop.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/Linwei94/GPU-monitor"
 Repository = "https://github.com/Linwei94/GPU-monitor"
+Issues = "https://github.com/Linwei94/GPU-monitor/issues"
