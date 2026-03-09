@@ -297,6 +297,45 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     font-size: 10px;
     margin-left: 2px;
   }
+
+  .mode-toggle {
+    display: flex;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 12px;
+  }
+  .mode-toggle button {
+    padding: 5px 12px;
+    border: none;
+    background: transparent;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 12px;
+  }
+  .mode-toggle button.active {
+    background: #334155;
+    color: #e2e8f0;
+  }
+
+  /* Compact mode */
+  body.compact .summary-bar { margin-bottom: 16px; }
+  body.compact .summary-card { padding: 10px 16px; min-width: 120px; }
+  body.compact .summary-card .value { font-size: 22px; }
+  body.compact .host-grid { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 10px; }
+  body.compact .host-header { padding: 10px 14px; }
+  body.compact .host-name { font-size: 14px; }
+  body.compact .host-body { padding: 8px 14px; }
+  body.compact .gpu-item { padding: 6px 0; }
+  body.compact .gpu-title { margin-bottom: 6px; }
+  body.compact .gpu-name { font-size: 12px; }
+  body.compact .gpu-stats { display: none; }
+  body.compact .bar-track { height: 6px; }
+  body.compact .bar-container { margin-bottom: 4px; }
+  body.compact .bar-label { font-size: 11px; margin-bottom: 2px; }
+  body.compact .gpu-users { margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -305,6 +344,10 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   <h1>gnvitop</h1>
   <div class="header-right">
     <span class="status-text" id="update-time"></span>
+    <div class="mode-toggle" id="mode-toggle">
+      <button onclick="setMode('normal')" id="mode-normal">Normal</button>
+      <button onclick="setMode('compact')" id="mode-compact">Compact</button>
+    </div>
     <label class="auto-refresh-toggle">
       <input type="checkbox" id="auto-refresh" checked>
       Auto (30s)
@@ -320,6 +363,15 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 
 <script>
 let autoRefreshTimer = null;
+
+function setMode(mode) {
+  document.body.classList.toggle('compact', mode === 'compact');
+  document.getElementById('mode-normal').classList.toggle('active', mode === 'normal');
+  document.getElementById('mode-compact').classList.toggle('active', mode === 'compact');
+  localStorage.setItem('gnvitop-mode', mode);
+}
+// Restore saved mode
+setMode(localStorage.getItem('gnvitop-mode') || 'normal');
 
 function usageClass(pct) {
   if (pct < 50) return 'usage-low';
