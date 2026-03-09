@@ -297,6 +297,44 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     font-size: 10px;
     margin-left: 2px;
   }
+
+  .mode-toggle {
+    display: flex;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 12px;
+  }
+  .mode-toggle button {
+    padding: 5px 12px;
+    border: none;
+    background: transparent;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 12px;
+  }
+  .mode-toggle button.active {
+    background: #334155;
+    color: #e2e8f0;
+  }
+
+  /* Mode transition animation */
+  .host-card {
+    animation: fadeSlideIn 0.3s ease;
+  }
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Compact mode */
+  body.compact .summary-bar { display: none; }
+  body.compact .host-grid { grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 12px; }
+  body.compact .host-header { padding: 12px 16px; }
+  body.compact .host-info { display: none; }
+  body.compact .host-body { padding: 12px 16px; }
 </style>
 </head>
 <body>
@@ -305,6 +343,10 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   <h1>gnvitop</h1>
   <div class="header-right">
     <span class="status-text" id="update-time"></span>
+    <div class="mode-toggle" id="mode-toggle">
+      <button onclick="setMode('normal')" id="mode-normal">Normal</button>
+      <button onclick="setMode('compact')" id="mode-compact">Compact</button>
+    </div>
     <label class="auto-refresh-toggle">
       <input type="checkbox" id="auto-refresh" checked>
       Auto (30s)
@@ -320,6 +362,19 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 
 <script>
 let autoRefreshTimer = null;
+let currentMode = 'normal';
+let lastData = null;
+
+function setMode(mode) {
+  currentMode = mode;
+  document.body.classList.toggle('compact', mode === 'compact');
+  document.getElementById('mode-normal').classList.toggle('active', mode === 'normal');
+  document.getElementById('mode-compact').classList.toggle('active', mode === 'compact');
+  localStorage.setItem('gnvitop-mode', mode);
+  if (lastData) { renderSummary(lastData.hosts); renderHosts(lastData.hosts); }
+}
+currentMode = localStorage.getItem('gnvitop-mode') || 'normal';
+setMode(currentMode);
 
 function usageClass(pct) {
   if (pct < 50) return 'usage-low';
@@ -383,6 +438,28 @@ function renderProcessUsers(processes, hostUser) {
 function renderGPU(gpu, hostUser) {
   const memPct = gpu.memory_usage_pct;
   const gpuPct = gpu.gpu_utilization_pct;
+
+  if (currentMode === 'compact') {
+    return `
+      <div class="gpu-item">
+        <div class="gpu-title">
+          <span class="gpu-name">GPU ${gpu.index}: ${gpu.name}</span>
+        </div>
+        <div class="bar-container">
+          <div class="bar-label">
+            <span>Memory</span>
+            <span>${formatMB(gpu.memory_used_mb)} / ${formatMB(gpu.memory_total_mb)}</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill ${usageClass(memPct)}" style="width:${memPct}%"></div>
+          </div>
+        </div>
+        ${renderProcessUsers(gpu.processes, hostUser)}
+      </div>
+    `;
+  }
+
+  // Normal: full details
   return `
     <div class="gpu-item">
       <div class="gpu-title">
@@ -433,7 +510,17 @@ function renderHosts(hosts) {
     return;
   }
 
-  container.innerHTML = '<div class="host-grid">' + hosts.map(host => {
+  const filtered = currentMode === 'compact' ? hosts.filter(h => h.status === 'ok') : hosts;
+
+  // Sort: hosts where current user has GPU processes first
+  filtered.sort((a, b) => {
+    const aHasMe = a.status === 'ok' && a.gpus.some(g => g.processes && g.processes.some(p => p.user === a.user));
+    const bHasMe = b.status === 'ok' && b.gpus.some(g => g.processes && g.processes.some(p => p.user === b.user));
+    if (aHasMe !== bHasMe) return bHasMe - aHasMe;
+    return 0;
+  });
+
+  container.innerHTML = '<div class="host-grid">' + filtered.map(host => {
     let body = '';
     if (host.status === 'ok') {
       body = host.gpus.map(g => renderGPU(g, host.user)).join('');
@@ -474,10 +561,10 @@ async function refresh() {
   btn.disabled = true;
   btn.textContent = 'Refreshing...';
   try {
-    const data = await fetchData(true);
-    renderSummary(data.hosts);
-    renderHosts(data.hosts);
-    updateTime(data.updated_at);
+    lastData = await fetchData(true);
+    renderSummary(lastData.hosts);
+    renderHosts(lastData.hosts);
+    updateTime(lastData.updated_at);
   } catch (e) {
     console.error(e);
   } finally {
@@ -493,10 +580,10 @@ function updateTime(ts) {
 
 async function init() {
   try {
-    const data = await fetchData(false);
-    renderSummary(data.hosts);
-    renderHosts(data.hosts);
-    updateTime(data.updated_at);
+    lastData = await fetchData(false);
+    renderSummary(lastData.hosts);
+    renderHosts(lastData.hosts);
+    updateTime(lastData.updated_at);
   } catch (e) {
     document.getElementById('content').innerHTML =
       '<div class="loading" style="color:#f87171">Failed to connect to server.</div>';
@@ -507,6 +594,7 @@ function setupAutoRefresh() {
   const checkbox = document.getElementById('auto-refresh');
   function doRefresh() {
     fetchData(false).then(data => {
+      lastData = data;
       renderSummary(data.hosts);
       renderHosts(data.hosts);
       updateTime(data.updated_at);
