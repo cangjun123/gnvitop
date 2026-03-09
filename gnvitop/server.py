@@ -23,19 +23,25 @@ GPU_QUERY_CMD = (
     "nvidia-smi --query-gpu=index,name,memory.total,memory.used,memory.free,"
     "utilization.gpu,temperature.gpu --format=csv,noheader,nounits 2>/dev/null"
 )
-PROCESS_QUERY_CMD = (
-    r"nvidia-smi --query-compute-apps=pid,gpu_index,used_gpu_memory "
-    r"--format=csv,noheader,nounits 2>/dev/null"
-)
-# Shell one-liner: for each process line, resolve PID to username via ps
+# nvidia-smi pmon: gives gpu_index, pid, type, fb_memory, command per process
+# tail -n +3 skips the two header lines; pid="-" means idle slot
 PROCESS_WITH_USER_CMD = (
-    PROCESS_QUERY_CMD
-    + r" | while IFS=', ' read -r pid gpu mem; do"
+    r"nvidia-smi pmon -c 1 -s m 2>/dev/null | tail -n +3"
+    r" | while read gpu pid type mem cmd; do"
+    r' if [ "$pid" != "-" ]; then'
     r" user=$(ps -o user= -p $pid 2>/dev/null | tr -d ' ');"
-    r' printf "%s,%s,%s,%s\n" "$pid" "$gpu" "$mem" "$user"; done'
+    r' [ "$mem" = "-" ] && mem=0;'
+    r' printf "%s,%s,%s,%s\n" "$pid" "$gpu" "$mem" "$user";'
+    r" fi; done"
 )
 
 CURRENT_USER = getpass.getuser()
+
+# System users to filter out from GPU process list
+SYSTEM_USERS = frozenset({
+    "root", "gdm", "lightdm", "sddm", "nvidia-persistenced",
+    "Xorg", "gnome-shell",
+})
 
 cache = {"data": [], "last_update": 0}
 cache_lock = threading.Lock()
@@ -185,16 +191,19 @@ def query_gpu(host_info):
 
 
 def _attach_processes(gpus, proc_output):
-    """Parse process output and attach to matching GPUs."""
+    """Parse process output and attach to matching GPUs (skip system users)."""
     gpu_by_index = {g["index"]: g for g in gpus}
     for line in proc_output.split("\n"):
         parts = [p.strip() for p in line.split(",")]
         if len(parts) >= 4 and parts[0].isdigit():
+            user = parts[3] if parts[3] else "unknown"
+            if user in SYSTEM_USERS:
+                continue
             gpu_idx = int(parts[1])
             proc = {
                 "pid": int(parts[0]),
                 "gpu_memory_mb": float(parts[2]) if parts[2] else 0,
-                "user": parts[3] if parts[3] else "unknown",
+                "user": user,
             }
             if gpu_idx in gpu_by_index:
                 gpu_by_index[gpu_idx]["processes"].append(proc)
@@ -289,8 +298,13 @@ def fetch_all_gpu_info():
             results.append(future.result())
 
     order = {"ok": 0, "no_gpu": 1, "error": 2}
-    # Local always first, then sort by status and alias
-    results.sort(key=lambda x: (0 if x.get("is_local") else 1, order.get(x["status"], 3), x["alias"]))
+    # Local first, then by GPU count descending, then status, then alias
+    results.sort(key=lambda x: (
+        0 if x.get("is_local") else 1,
+        order.get(x["status"], 3),
+        -len(x.get("gpus", [])),
+        x["alias"],
+    ))
     return results
 
 
@@ -306,11 +320,7 @@ def api_gpus():
         if now - cache["last_update"] > CACHE_TTL:
             cache["data"] = fetch_all_gpu_info()
             cache["last_update"] = now
-        return jsonify({
-            "hosts": cache["data"],
-            "updated_at": cache["last_update"],
-            "current_user": CURRENT_USER,
-        })
+        return jsonify({"hosts": cache["data"], "updated_at": cache["last_update"]})
 
 
 @app.route("/api/refresh")
@@ -318,8 +328,4 @@ def api_refresh():
     with cache_lock:
         cache["data"] = fetch_all_gpu_info()
         cache["last_update"] = time.time()
-        return jsonify({
-            "hosts": cache["data"],
-            "updated_at": cache["last_update"],
-            "current_user": CURRENT_USER,
-        })
+        return jsonify({"hosts": cache["data"], "updated_at": cache["last_update"]})
