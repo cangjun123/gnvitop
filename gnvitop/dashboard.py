@@ -105,6 +105,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .host-card.status-ok { border-left: 3px solid #22c55e; }
   .host-card.status-no_gpu { border-left: 3px solid #eab308; }
   .host-card.status-error { border-left: 3px solid #ef4444; }
+  .host-card.is-local { border-left: 3px solid #60a5fa; }
 
   .host-header {
     padding: 16px 20px;
@@ -265,6 +266,37 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   }
 
   .auto-refresh-toggle input { cursor: pointer; }
+
+  .badge-local { background: #172554; color: #60a5fa; }
+
+  .gpu-users {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+  }
+
+  .user-tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: #334155;
+    color: #94a3b8;
+    font-family: monospace;
+  }
+
+  .user-tag.current-user {
+    background: #172554;
+    color: #60a5fa;
+    font-weight: 700;
+    border: 1px solid #3b82f6;
+  }
+
+  .user-mem {
+    color: #64748b;
+    font-size: 10px;
+    margin-left: 2px;
+  }
 </style>
 </head>
 <body>
@@ -288,6 +320,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 
 <script>
 let autoRefreshTimer = null;
+let currentUser = '';
 
 function usageClass(pct) {
   if (pct < 50) return 'usage-low';
@@ -332,6 +365,22 @@ function renderSummary(hosts) {
   `;
 }
 
+function renderProcessUsers(processes) {
+  if (!processes || !processes.length) return '';
+  // Aggregate memory per user
+  const userMem = {};
+  for (const p of processes) {
+    const u = p.user || 'unknown';
+    userMem[u] = (userMem[u] || 0) + (p.gpu_memory_mb || 0);
+  }
+  const tags = Object.entries(userMem).map(([user, mem]) => {
+    const isCurrent = user === currentUser;
+    const cls = isCurrent ? 'user-tag current-user' : 'user-tag';
+    return `<span class="${cls}">${user}<span class="user-mem">${formatMB(mem)}</span></span>`;
+  }).join('');
+  return `<div class="gpu-users">${tags}</div>`;
+}
+
 function renderGPU(gpu) {
   const memPct = gpu.memory_usage_pct;
   const gpuPct = gpu.gpu_utilization_pct;
@@ -359,6 +408,7 @@ function renderGPU(gpu) {
           <div class="bar-fill ${usageClass(memPct)}" style="width:${memPct}%"></div>
         </div>
       </div>
+      ${renderProcessUsers(gpu.processes)}
       <div class="gpu-stats">
         <div class="stat">
           <div class="stat-value" style="color:${gpuPct < 10 ? '#4ade80' : gpuPct < 50 ? '#facc15' : '#f87171'}">${gpuPct}%</div>
@@ -394,15 +444,17 @@ function renderHosts(hosts) {
       body = `<div class="error-msg">${host.error || 'Unknown error'}</div>`;
     }
 
-    const badgeClass = host.status === 'ok' ? 'badge-ok' : host.status === 'no_gpu' ? 'badge-no_gpu' : 'badge-error';
-    const badgeText = host.status === 'ok' ? 'Online' : host.status === 'no_gpu' ? 'No GPU' : 'Offline';
+    const isLocal = host.is_local;
+    const badgeClass = isLocal ? 'badge-local' : host.status === 'ok' ? 'badge-ok' : host.status === 'no_gpu' ? 'badge-no_gpu' : 'badge-error';
+    const badgeText = isLocal ? 'Local' : host.status === 'ok' ? 'Online' : host.status === 'no_gpu' ? 'No GPU' : 'Offline';
+    const cardClass = `host-card status-${host.status}${isLocal ? ' is-local' : ''}`;
 
     return `
-      <div class="host-card status-${host.status}">
+      <div class="${cardClass}">
         <div class="host-header">
           <div>
             <div class="host-name">${host.alias}</div>
-            <div class="host-info">${host.user}@${host.hostname}:${host.port}</div>
+            <div class="host-info">${host.user}@${host.hostname}${host.port ? ':' + host.port : ''}</div>
           </div>
           <span class="status-badge ${badgeClass}">${badgeText}</span>
         </div>
@@ -424,6 +476,7 @@ async function refresh() {
   btn.textContent = 'Refreshing...';
   try {
     const data = await fetchData(true);
+    if (data.current_user) currentUser = data.current_user;
     renderSummary(data.hosts);
     renderHosts(data.hosts);
     updateTime(data.updated_at);
@@ -443,6 +496,7 @@ function updateTime(ts) {
 async function init() {
   try {
     const data = await fetchData(false);
+    if (data.current_user) currentUser = data.current_user;
     renderSummary(data.hosts);
     renderHosts(data.hosts);
     updateTime(data.updated_at);
@@ -456,6 +510,7 @@ function setupAutoRefresh() {
   const checkbox = document.getElementById('auto-refresh');
   function doRefresh() {
     fetchData(false).then(data => {
+      if (data.current_user) currentUser = data.current_user;
       renderSummary(data.hosts);
       renderHosts(data.hosts);
       updateTime(data.updated_at);
