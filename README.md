@@ -1,6 +1,19 @@
-# gnvitop
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Linwei94/gnvitop/main/assets/logo.svg" width="80" alt="gnvitop logo">
+</p>
 
-**Global nvitop** --- a web-based GPU monitoring dashboard that monitors **all** your remote GPU servers from a single page.
+<h1 align="center">gnvitop</h1>
+
+<p align="center">
+  <strong>Global nvitop</strong> — a web-based GPU monitoring dashboard that monitors <strong>all</strong> your remote GPU servers from a single page.
+</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/gnvitop/"><img src="https://img.shields.io/pypi/v/gnvitop?color=blue" alt="PyPI"></a>
+  <a href="https://pypi.org/project/gnvitop/"><img src="https://img.shields.io/pypi/pyversions/gnvitop" alt="Python"></a>
+  <a href="https://github.com/Linwei94/gnvitop/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Linwei94/gnvitop" alt="License"></a>
+</p>
+
 ![960cd5fae22199ece06060e7ec8862a4](https://github.com/user-attachments/assets/2ca35564-c891-4af9-9b30-5ebb0949ba99)
 
 
