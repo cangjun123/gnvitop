@@ -23,16 +23,16 @@ GPU_QUERY_CMD = (
     "nvidia-smi --query-gpu=index,name,memory.total,memory.used,memory.free,"
     "utilization.gpu,temperature.gpu --format=csv,noheader,nounits 2>/dev/null"
 )
-PROCESS_QUERY_CMD = (
-    r"nvidia-smi --query-compute-apps=pid,gpu_index,used_gpu_memory "
-    r"--format=csv,noheader,nounits 2>/dev/null"
-)
-# Shell one-liner: for each process line, resolve PID to username via ps
+# nvidia-smi pmon: gives gpu_index, pid, type, fb_memory, command per process
+# tail -n +3 skips the two header lines; pid="-" means idle slot
 PROCESS_WITH_USER_CMD = (
-    PROCESS_QUERY_CMD
-    + r" | while IFS=', ' read -r pid gpu mem; do"
+    r"nvidia-smi pmon -c 1 -s m 2>/dev/null | tail -n +3"
+    r" | while read gpu pid type mem cmd; do"
+    r' if [ "$pid" != "-" ]; then'
     r" user=$(ps -o user= -p $pid 2>/dev/null | tr -d ' ');"
-    r' printf "%s,%s,%s,%s\n" "$pid" "$gpu" "$mem" "$user"; done'
+    r' [ "$mem" = "-" ] && mem=0;'
+    r' printf "%s,%s,%s,%s\n" "$pid" "$gpu" "$mem" "$user";'
+    r" fi; done"
 )
 
 CURRENT_USER = getpass.getuser()
