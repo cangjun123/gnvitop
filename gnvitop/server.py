@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """GPU Monitor - Flask server that reads SSH config and queries remote GPUs."""
 
+import getpass
 import os
 import re
+import subprocess
 import time
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -21,6 +23,19 @@ GPU_QUERY_CMD = (
     "nvidia-smi --query-gpu=index,name,memory.total,memory.used,memory.free,"
     "utilization.gpu,temperature.gpu --format=csv,noheader,nounits 2>/dev/null"
 )
+PROCESS_QUERY_CMD = (
+    r"nvidia-smi --query-compute-apps=pid,gpu_index,used_gpu_memory "
+    r"--format=csv,noheader,nounits 2>/dev/null"
+)
+# Shell one-liner: for each process line, resolve PID to username via ps
+PROCESS_WITH_USER_CMD = (
+    PROCESS_QUERY_CMD
+    + r" | while IFS=', ' read -r pid gpu mem; do"
+    r" user=$(ps -o user= -p $pid 2>/dev/null | tr -d ' ');"
+    r' printf "%s,%s,%s,%s\n" "$pid" "$gpu" "$mem" "$user"; done'
+)
+
+CURRENT_USER = getpass.getuser()
 
 cache = {"data": [], "last_update": 0}
 cache_lock = threading.Lock()
@@ -132,7 +147,20 @@ def query_gpu(host_info):
                         "memory_usage_pct": round(mem_used / mem_total * 100, 1) if mem_total > 0 else 0,
                         "gpu_utilization_pct": utilization,
                         "temperature_c": float(parts[6]),
+                        "processes": [],
                     })
+
+            # Query per-GPU processes with usernames
+            try:
+                _, p_stdout, _ = client.exec_command(
+                    PROCESS_WITH_USER_CMD, timeout=SSH_TIMEOUT
+                )
+                proc_output = p_stdout.read().decode("utf-8").strip()
+                if proc_output:
+                    _attach_processes(gpus, proc_output)
+            except Exception:
+                pass  # process info is best-effort
+
             result["gpus"] = gpus
             if gpus:
                 result["status"] = "ok"
@@ -156,21 +184,113 @@ def query_gpu(host_info):
     return result
 
 
+def _attach_processes(gpus, proc_output):
+    """Parse process output and attach to matching GPUs."""
+    gpu_by_index = {g["index"]: g for g in gpus}
+    for line in proc_output.split("\n"):
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) >= 4 and parts[0].isdigit():
+            gpu_idx = int(parts[1])
+            proc = {
+                "pid": int(parts[0]),
+                "gpu_memory_mb": float(parts[2]) if parts[2] else 0,
+                "user": parts[3] if parts[3] else "unknown",
+            }
+            if gpu_idx in gpu_by_index:
+                gpu_by_index[gpu_idx]["processes"].append(proc)
+
+
+def query_local_gpu():
+    """Query the local machine for GPU information."""
+    import socket
+
+    hostname = socket.gethostname()
+    result = {
+        "alias": "localhost",
+        "hostname": hostname,
+        "user": CURRENT_USER,
+        "port": 0,
+        "status": "error",
+        "error": None,
+        "gpus": [],
+        "is_local": True,
+    }
+
+    try:
+        output = subprocess.run(
+            GPU_QUERY_CMD, shell=True, capture_output=True, text=True, timeout=10
+        ).stdout.strip()
+
+        if not output:
+            result["status"] = "no_gpu"
+            result["error"] = "No NVIDIA GPU found or nvidia-smi not available"
+        else:
+            gpus = []
+            for line in output.split("\n"):
+                parts = [p.strip() for p in line.split(",")]
+                if len(parts) >= 7:
+                    mem_total = float(parts[2])
+                    mem_used = float(parts[3])
+                    mem_free = float(parts[4])
+                    utilization = float(parts[5])
+                    gpus.append({
+                        "index": int(parts[0]),
+                        "name": parts[1],
+                        "memory_total_mb": mem_total,
+                        "memory_used_mb": mem_used,
+                        "memory_free_mb": mem_free,
+                        "memory_usage_pct": round(mem_used / mem_total * 100, 1) if mem_total > 0 else 0,
+                        "gpu_utilization_pct": utilization,
+                        "temperature_c": float(parts[6]),
+                        "processes": [],
+                    })
+
+            # Query local processes
+            try:
+                proc_output = subprocess.run(
+                    PROCESS_WITH_USER_CMD, shell=True, capture_output=True,
+                    text=True, timeout=10
+                ).stdout.strip()
+                if proc_output:
+                    _attach_processes(gpus, proc_output)
+            except Exception:
+                pass
+
+            result["gpus"] = gpus
+            if gpus:
+                result["status"] = "ok"
+            else:
+                result["status"] = "no_gpu"
+                result["error"] = "nvidia-smi returned no valid GPU data"
+
+    except FileNotFoundError:
+        result["status"] = "no_gpu"
+        result["error"] = "nvidia-smi not found"
+    except subprocess.TimeoutExpired:
+        result["error"] = "nvidia-smi timed out"
+    except Exception as e:
+        result["error"] = f"{type(e).__name__}: {e}"
+
+    return result
+
+
 def fetch_all_gpu_info():
-    """Query all hosts concurrently."""
+    """Query all hosts (local + remote) concurrently."""
     hosts = parse_ssh_config(SSH_CONFIG_PATH)
     results = []
 
-    if not hosts:
-        return results
-
     with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = {executor.submit(query_gpu, h): h for h in hosts}
+        # Submit local query
+        futures = {executor.submit(query_local_gpu): None}
+        # Submit remote queries
+        for h in hosts:
+            futures[executor.submit(query_gpu, h)] = h
         for future in as_completed(futures):
             results.append(future.result())
 
     order = {"ok": 0, "no_gpu": 1, "error": 2}
-    results.sort(key=lambda x: (order.get(x["status"], 3), x["alias"]))
+    # Local always first, then sort by status and alias
+    results.sort(key=lambda x: (0 if x.get("is_local") else 1, order.get(x["status"], 3), x["alias"]))
     return results
 
 
@@ -186,7 +306,11 @@ def api_gpus():
         if now - cache["last_update"] > CACHE_TTL:
             cache["data"] = fetch_all_gpu_info()
             cache["last_update"] = now
-        return jsonify({"hosts": cache["data"], "updated_at": cache["last_update"]})
+        return jsonify({
+            "hosts": cache["data"],
+            "updated_at": cache["last_update"],
+            "current_user": CURRENT_USER,
+        })
 
 
 @app.route("/api/refresh")
@@ -194,4 +318,8 @@ def api_refresh():
     with cache_lock:
         cache["data"] = fetch_all_gpu_info()
         cache["last_update"] = time.time()
-        return jsonify({"hosts": cache["data"], "updated_at": cache["last_update"]})
+        return jsonify({
+            "hosts": cache["data"],
+            "updated_at": cache["last_update"],
+            "current_user": CURRENT_USER,
+        })
