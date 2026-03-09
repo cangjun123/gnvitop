@@ -511,6 +511,15 @@ function renderHosts(hosts) {
   }
 
   const filtered = currentMode === 'compact' ? hosts.filter(h => h.status === 'ok') : hosts;
+
+  // Sort: hosts where current user has GPU processes first
+  filtered.sort((a, b) => {
+    const aHasMe = a.status === 'ok' && a.gpus.some(g => g.processes && g.processes.some(p => p.user === a.user));
+    const bHasMe = b.status === 'ok' && b.gpus.some(g => g.processes && g.processes.some(p => p.user === b.user));
+    if (aHasMe !== bHasMe) return bHasMe - aHasMe;
+    return 0;
+  });
+
   container.innerHTML = '<div class="host-grid">' + filtered.map(host => {
     let body = '';
     if (host.status === 'ok') {
