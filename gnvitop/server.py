@@ -2,7 +2,9 @@
 """GPU Monitor - Flask server that reads SSH config and queries remote GPUs."""
 
 import getpass
+import json
 import os
+import queue
 import re
 import subprocess
 import time
@@ -19,13 +21,14 @@ app = Flask(__name__)
 
 SSH_CONFIG_PATH = os.path.expanduser("~/.ssh/config")
 SSH_TIMEOUT = 8
-GPU_QUERY_CMD = (
+
+# Single combined command: GPU stats + separator + per-process info
+# Splitting on ---SEP--- lets us parse both in one SSH round trip
+_GPU_QUERY = (
     "nvidia-smi --query-gpu=index,name,memory.total,memory.used,memory.free,"
     "utilization.gpu,temperature.gpu --format=csv,noheader,nounits 2>/dev/null"
 )
-# nvidia-smi pmon: gives gpu_index, pid, type, fb_memory, command per process
-# tail -n +3 skips the two header lines; pid="-" means idle slot
-PROCESS_WITH_USER_CMD = (
+_PROC_QUERY = (
     r"nvidia-smi pmon -c 1 -s m 2>/dev/null | tail -n +3"
     r" | while read gpu pid type mem cmd; do"
     r' if [ "$pid" != "-" ]; then'
@@ -34,6 +37,7 @@ PROCESS_WITH_USER_CMD = (
     r' printf "%s,%s,%s,%s\n" "$pid" "$gpu" "$mem" "$user";'
     r" fi; done"
 )
+COMBINED_CMD = f"{_GPU_QUERY}; echo '---SEP---'; {_PROC_QUERY}"
 
 CURRENT_USER = getpass.getuser()
 
@@ -46,6 +50,10 @@ SYSTEM_USERS = frozenset({
 cache = {"data": [], "last_update": 0}
 cache_lock = threading.Lock()
 CACHE_TTL = 30
+
+# Background refresh state
+_bg_refresh_running = False
+_bg_refresh_lock = threading.Lock()
 
 
 def parse_ssh_config(path):
@@ -93,8 +101,43 @@ def parse_ssh_config(path):
     return hosts
 
 
+def _parse_combined_output(output):
+    """Split combined command output into GPU lines and process lines."""
+    if "---SEP---" in output:
+        gpu_part, proc_part = output.split("---SEP---", 1)
+    else:
+        gpu_part, proc_part = output, ""
+    return gpu_part.strip(), proc_part.strip()
+
+
+def _build_gpus(gpu_part):
+    """Parse GPU stats section into a list of GPU dicts."""
+    gpus = []
+    for line in gpu_part.split("\n"):
+        if not line.strip():
+            continue
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) >= 7:
+            mem_total = float(parts[2])
+            mem_used = float(parts[3])
+            mem_free = float(parts[4])
+            utilization = float(parts[5])
+            gpus.append({
+                "index": int(parts[0]),
+                "name": parts[1],
+                "memory_total_mb": mem_total,
+                "memory_used_mb": mem_used,
+                "memory_free_mb": mem_free,
+                "memory_usage_pct": round(mem_used / mem_total * 100, 1) if mem_total > 0 else 0,
+                "gpu_utilization_pct": utilization,
+                "temperature_c": float(parts[6]),
+                "processes": [],
+            })
+    return gpus
+
+
 def query_gpu(host_info):
-    """SSH into a host and query GPU information."""
+    """SSH into a host and query GPU information (single round trip)."""
     alias = host_info["alias"]
     hostname = host_info["hostname"] or alias
     user = host_info["user"]
@@ -129,52 +172,26 @@ def query_gpu(host_info):
 
         client.connect(**connect_kwargs)
 
-        stdin, stdout, stderr = client.exec_command(GPU_QUERY_CMD, timeout=SSH_TIMEOUT)
+        # Single exec_command for both GPU stats and process info
+        _, stdout, _ = client.exec_command(COMBINED_CMD, timeout=SSH_TIMEOUT)
         output = stdout.read().decode("utf-8").strip()
+        client.close()
 
-        if not output:
+        gpu_part, proc_part = _parse_combined_output(output)
+
+        if not gpu_part:
             result["status"] = "no_gpu"
             result["error"] = "No NVIDIA GPU found or nvidia-smi not available"
         else:
-            gpus = []
-            for line in output.split("\n"):
-                parts = [p.strip() for p in line.split(",")]
-                if len(parts) >= 7:
-                    mem_total = float(parts[2])
-                    mem_used = float(parts[3])
-                    mem_free = float(parts[4])
-                    utilization = float(parts[5])
-                    gpus.append({
-                        "index": int(parts[0]),
-                        "name": parts[1],
-                        "memory_total_mb": mem_total,
-                        "memory_used_mb": mem_used,
-                        "memory_free_mb": mem_free,
-                        "memory_usage_pct": round(mem_used / mem_total * 100, 1) if mem_total > 0 else 0,
-                        "gpu_utilization_pct": utilization,
-                        "temperature_c": float(parts[6]),
-                        "processes": [],
-                    })
-
-            # Query per-GPU processes with usernames
-            try:
-                _, p_stdout, _ = client.exec_command(
-                    PROCESS_WITH_USER_CMD, timeout=SSH_TIMEOUT
-                )
-                proc_output = p_stdout.read().decode("utf-8").strip()
-                if proc_output:
-                    _attach_processes(gpus, proc_output)
-            except Exception:
-                pass  # process info is best-effort
-
+            gpus = _build_gpus(gpu_part)
+            if proc_part:
+                _attach_processes(gpus, proc_part)
             result["gpus"] = gpus
             if gpus:
                 result["status"] = "ok"
             else:
                 result["status"] = "no_gpu"
                 result["error"] = "nvidia-smi returned no valid GPU data"
-
-        client.close()
 
     except paramiko.AuthenticationException:
         result["error"] = "Authentication failed"
@@ -210,7 +227,7 @@ def _attach_processes(gpus, proc_output):
 
 
 def query_local_gpu():
-    """Query the local machine for GPU information."""
+    """Query the local machine for GPU information (single subprocess call)."""
     import socket
 
     hostname = socket.gethostname()
@@ -227,44 +244,18 @@ def query_local_gpu():
 
     try:
         output = subprocess.run(
-            GPU_QUERY_CMD, shell=True, capture_output=True, text=True, timeout=10
+            COMBINED_CMD, shell=True, capture_output=True, text=True, timeout=15
         ).stdout.strip()
 
-        if not output:
+        gpu_part, proc_part = _parse_combined_output(output)
+
+        if not gpu_part:
             result["status"] = "no_gpu"
             result["error"] = "No NVIDIA GPU found or nvidia-smi not available"
         else:
-            gpus = []
-            for line in output.split("\n"):
-                parts = [p.strip() for p in line.split(",")]
-                if len(parts) >= 7:
-                    mem_total = float(parts[2])
-                    mem_used = float(parts[3])
-                    mem_free = float(parts[4])
-                    utilization = float(parts[5])
-                    gpus.append({
-                        "index": int(parts[0]),
-                        "name": parts[1],
-                        "memory_total_mb": mem_total,
-                        "memory_used_mb": mem_used,
-                        "memory_free_mb": mem_free,
-                        "memory_usage_pct": round(mem_used / mem_total * 100, 1) if mem_total > 0 else 0,
-                        "gpu_utilization_pct": utilization,
-                        "temperature_c": float(parts[6]),
-                        "processes": [],
-                    })
-
-            # Query local processes
-            try:
-                proc_output = subprocess.run(
-                    PROCESS_WITH_USER_CMD, shell=True, capture_output=True,
-                    text=True, timeout=10
-                ).stdout.strip()
-                if proc_output:
-                    _attach_processes(gpus, proc_output)
-            except Exception:
-                pass
-
+            gpus = _build_gpus(gpu_part)
+            if proc_part:
+                _attach_processes(gpus, proc_part)
             result["gpus"] = gpus
             if gpus:
                 result["status"] = "ok"
@@ -283,22 +274,8 @@ def query_local_gpu():
     return result
 
 
-def fetch_all_gpu_info():
-    """Query all hosts (local + remote) concurrently."""
-    hosts = parse_ssh_config(SSH_CONFIG_PATH)
-    results = []
-
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        # Submit local query
-        futures = {executor.submit(query_local_gpu): None}
-        # Submit remote queries
-        for h in hosts:
-            futures[executor.submit(query_gpu, h)] = h
-        for future in as_completed(futures):
-            results.append(future.result())
-
+def _sort_results(results):
     order = {"ok": 0, "no_gpu": 1, "error": 2}
-    # Local first, then by GPU count descending, then status, then alias
     results.sort(key=lambda x: (
         0 if x.get("is_local") else 1,
         order.get(x["status"], 3),
@@ -308,6 +285,62 @@ def fetch_all_gpu_info():
     return results
 
 
+def fetch_all_gpu_info():
+    """Query all hosts (local + remote) concurrently and return sorted results."""
+    hosts = parse_ssh_config(SSH_CONFIG_PATH)
+    results = []
+
+    with ThreadPoolExecutor(max_workers=20) as executor:
+        futures = {executor.submit(query_local_gpu): None}
+        for h in hosts:
+            futures[executor.submit(query_gpu, h)] = h
+        for future in as_completed(futures):
+            results.append(future.result())
+
+    return _sort_results(results)
+
+
+def _do_background_refresh():
+    """Run fetch_all_gpu_info and update cache; reset _bg_refresh_running flag when done."""
+    global _bg_refresh_running
+    try:
+        data = fetch_all_gpu_info()
+        with cache_lock:
+            cache["data"] = data
+            cache["last_update"] = time.time()
+    finally:
+        with _bg_refresh_lock:
+            _bg_refresh_running = False
+
+
+def _trigger_background_refresh():
+    """Spawn a background refresh thread if one isn't already running."""
+    global _bg_refresh_running
+    with _bg_refresh_lock:
+        if _bg_refresh_running:
+            return
+        _bg_refresh_running = True
+    t = threading.Thread(target=_do_background_refresh, daemon=True)
+    t.start()
+
+
+def _start_background_warmer():
+    """Background thread that keeps cache warm by refreshing every CACHE_TTL seconds."""
+    def _warmer():
+        # Initial warm-up: start immediately so first page load hits cached data
+        _do_background_refresh()
+        while True:
+            time.sleep(CACHE_TTL)
+            _do_background_refresh()
+
+    t = threading.Thread(target=_warmer, daemon=True)
+    t.start()
+
+
+# Start background cache warmer when module is imported
+_start_background_warmer()
+
+
 @app.route("/")
 def index():
     return Response(DASHBOARD_HTML, mimetype="text/html")
@@ -315,17 +348,52 @@ def index():
 
 @app.route("/api/gpus")
 def api_gpus():
+    """Return cached data immediately; trigger background refresh if cache is stale."""
     now = time.time()
     with cache_lock:
-        if now - cache["last_update"] > CACHE_TTL:
-            cache["data"] = fetch_all_gpu_info()
-            cache["last_update"] = now
-        return jsonify({"hosts": cache["data"], "updated_at": cache["last_update"]})
+        data = cache["data"]
+        last_update = cache["last_update"]
+
+    if now - last_update > CACHE_TTL:
+        _trigger_background_refresh()
+
+    return jsonify({"hosts": data, "updated_at": last_update})
 
 
 @app.route("/api/refresh")
 def api_refresh():
+    """Force a synchronous refresh and return fresh data."""
     with cache_lock:
         cache["data"] = fetch_all_gpu_info()
         cache["last_update"] = time.time()
         return jsonify({"hosts": cache["data"], "updated_at": cache["last_update"]})
+
+
+@app.route("/api/stream")
+def api_stream():
+    """SSE endpoint: streams each host result as it arrives, then a 'done' event."""
+    def generate():
+        hosts = parse_ssh_config(SSH_CONFIG_PATH)
+        results = []
+
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            futures = {executor.submit(query_local_gpu): None}
+            for h in hosts:
+                futures[executor.submit(query_gpu, h)] = h
+
+            for future in as_completed(futures):
+                host_result = future.result()
+                results.append(host_result)
+                payload = json.dumps({"host": host_result})
+                yield f"data: {payload}\n\n"
+
+        # Update cache with fresh streamed data
+        sorted_results = _sort_results(results)
+        with cache_lock:
+            cache["data"] = sorted_results
+            cache["last_update"] = time.time()
+
+        yield f"data: {json.dumps({'done': True, 'updated_at': cache['last_update']})}\n\n"
+
+    return Response(generate(), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
