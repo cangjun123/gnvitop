@@ -19,10 +19,10 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 
   .header {
     display: flex;
-    flex-direction: column;
     align-items: center;
+    justify-content: center;
     margin-bottom: 28px;
-    gap: 12px;
+    position: relative;
   }
 
   .header h1 {
@@ -30,14 +30,14 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     font-weight: 700;
     color: #f1f5f9;
     letter-spacing: -0.5px;
-    text-align: center;
-    width: 100%;
   }
 
   .header-right {
     display: flex;
     align-items: center;
     gap: 16px;
+    position: absolute;
+    right: 0;
   }
 
   .status-text {
