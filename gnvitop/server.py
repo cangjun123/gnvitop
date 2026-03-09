@@ -37,6 +37,12 @@ PROCESS_WITH_USER_CMD = (
 
 CURRENT_USER = getpass.getuser()
 
+# System users to filter out from GPU process list
+SYSTEM_USERS = frozenset({
+    "root", "gdm", "lightdm", "sddm", "nvidia-persistenced",
+    "Xorg", "gnome-shell",
+})
+
 cache = {"data": [], "last_update": 0}
 cache_lock = threading.Lock()
 CACHE_TTL = 30
@@ -185,16 +191,19 @@ def query_gpu(host_info):
 
 
 def _attach_processes(gpus, proc_output):
-    """Parse process output and attach to matching GPUs."""
+    """Parse process output and attach to matching GPUs (skip system users)."""
     gpu_by_index = {g["index"]: g for g in gpus}
     for line in proc_output.split("\n"):
         parts = [p.strip() for p in line.split(",")]
         if len(parts) >= 4 and parts[0].isdigit():
+            user = parts[3] if parts[3] else "unknown"
+            if user in SYSTEM_USERS:
+                continue
             gpu_idx = int(parts[1])
             proc = {
                 "pid": int(parts[0]),
                 "gpu_memory_mb": float(parts[2]) if parts[2] else 0,
-                "user": parts[3] if parts[3] else "unknown",
+                "user": user,
             }
             if gpu_idx in gpu_by_index:
                 gpu_by_index[gpu_idx]["processes"].append(proc)
@@ -289,8 +298,13 @@ def fetch_all_gpu_info():
             results.append(future.result())
 
     order = {"ok": 0, "no_gpu": 1, "error": 2}
-    # Local always first, then sort by status and alias
-    results.sort(key=lambda x: (0 if x.get("is_local") else 1, order.get(x["status"], 3), x["alias"]))
+    # Local first, then by GPU count descending, then status, then alias
+    results.sort(key=lambda x: (
+        0 if x.get("is_local") else 1,
+        order.get(x["status"], 3),
+        -len(x.get("gpus", [])),
+        x["alias"],
+    ))
     return results
 
 
@@ -306,11 +320,7 @@ def api_gpus():
         if now - cache["last_update"] > CACHE_TTL:
             cache["data"] = fetch_all_gpu_info()
             cache["last_update"] = now
-        return jsonify({
-            "hosts": cache["data"],
-            "updated_at": cache["last_update"],
-            "current_user": CURRENT_USER,
-        })
+        return jsonify({"hosts": cache["data"], "updated_at": cache["last_update"]})
 
 
 @app.route("/api/refresh")
@@ -318,8 +328,4 @@ def api_refresh():
     with cache_lock:
         cache["data"] = fetch_all_gpu_info()
         cache["last_update"] = time.time()
-        return jsonify({
-            "hosts": cache["data"],
-            "updated_at": cache["last_update"],
-            "current_user": CURRENT_USER,
-        })
+        return jsonify({"hosts": cache["data"], "updated_at": cache["last_update"]})

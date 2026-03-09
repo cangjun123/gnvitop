@@ -320,7 +320,6 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 
 <script>
 let autoRefreshTimer = null;
-let currentUser = '';
 
 function usageClass(pct) {
   if (pct < 50) return 'usage-low';
@@ -365,7 +364,7 @@ function renderSummary(hosts) {
   `;
 }
 
-function renderProcessUsers(processes) {
+function renderProcessUsers(processes, hostUser) {
   if (!processes || !processes.length) return '';
   // Aggregate memory per user
   const userMem = {};
@@ -374,14 +373,14 @@ function renderProcessUsers(processes) {
     userMem[u] = (userMem[u] || 0) + (p.gpu_memory_mb || 0);
   }
   const tags = Object.entries(userMem).map(([user, mem]) => {
-    const isCurrent = user === currentUser;
+    const isCurrent = user === hostUser;
     const cls = isCurrent ? 'user-tag current-user' : 'user-tag';
     return `<span class="${cls}">${user}<span class="user-mem">${formatMB(mem)}</span></span>`;
   }).join('');
   return `<div class="gpu-users">${tags}</div>`;
 }
 
-function renderGPU(gpu) {
+function renderGPU(gpu, hostUser) {
   const memPct = gpu.memory_usage_pct;
   const gpuPct = gpu.gpu_utilization_pct;
   return `
@@ -408,7 +407,7 @@ function renderGPU(gpu) {
           <div class="bar-fill ${usageClass(memPct)}" style="width:${memPct}%"></div>
         </div>
       </div>
-      ${renderProcessUsers(gpu.processes)}
+      ${renderProcessUsers(gpu.processes, hostUser)}
       <div class="gpu-stats">
         <div class="stat">
           <div class="stat-value" style="color:${gpuPct < 10 ? '#4ade80' : gpuPct < 50 ? '#facc15' : '#f87171'}">${gpuPct}%</div>
@@ -437,7 +436,7 @@ function renderHosts(hosts) {
   container.innerHTML = '<div class="host-grid">' + hosts.map(host => {
     let body = '';
     if (host.status === 'ok') {
-      body = host.gpus.map(renderGPU).join('');
+      body = host.gpus.map(g => renderGPU(g, host.user)).join('');
     } else if (host.status === 'no_gpu') {
       body = `<div class="no-gpu-msg">${host.error || 'No NVIDIA GPU detected'}</div>`;
     } else {
@@ -476,7 +475,6 @@ async function refresh() {
   btn.textContent = 'Refreshing...';
   try {
     const data = await fetchData(true);
-    if (data.current_user) currentUser = data.current_user;
     renderSummary(data.hosts);
     renderHosts(data.hosts);
     updateTime(data.updated_at);
@@ -496,7 +494,6 @@ function updateTime(ts) {
 async function init() {
   try {
     const data = await fetchData(false);
-    if (data.current_user) currentUser = data.current_user;
     renderSummary(data.hosts);
     renderHosts(data.hosts);
     updateTime(data.updated_at);
@@ -510,7 +507,6 @@ function setupAutoRefresh() {
   const checkbox = document.getElementById('auto-refresh');
   function doRefresh() {
     fetchData(false).then(data => {
-      if (data.current_user) currentUser = data.current_user;
       renderSummary(data.hosts);
       renderHosts(data.hosts);
       updateTime(data.updated_at);
