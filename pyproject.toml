@@ -31,6 +31,9 @@ dependencies = [
 [project.scripts]
 gnvitop = "gnvitop.cli:main"
 
+[tool.setuptools.packages.find]
+include = ["gnvitop*"]
+
 [project.urls]
 Homepage = "https://github.com/Linwei94/gnvitop"
 Repository = "https://github.com/Linwei94/gnvitop"
