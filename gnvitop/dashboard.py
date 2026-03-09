@@ -330,12 +330,61 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   }
 
   /* Compact mode */
-  body.compact .host-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
-  body.compact .host-header { padding: 10px 14px; }
-  body.compact .host-body { padding: 8px 14px; }
-  body.compact .gpu-item { padding: 6px 0; }
-  body.compact .gpu-title { margin-bottom: 4px; }
-  body.compact .gpu-users { margin-top: 4px; }
+  body.compact .summary-bar { display: none; }
+  body.compact .host-grid { grid-template-columns: repeat(auto-fill, minmax(520px, 1fr)); gap: 8px; }
+  body.compact .host-card { border-radius: 8px; }
+  body.compact .host-header { padding: 8px 14px; border-bottom: none; }
+  body.compact .host-name { font-size: 13px; }
+  body.compact .host-info { display: none; }
+  body.compact .host-body { padding: 4px 14px 8px; }
+
+  .compact-gpu-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 0;
+    font-size: 12px;
+  }
+  .compact-gpu-row + .compact-gpu-row { border-top: 1px solid rgba(51,65,85,0.5); }
+  .compact-gpu-label {
+    color: #94a3b8;
+    white-space: nowrap;
+    min-width: 60px;
+    font-weight: 600;
+    font-size: 11px;
+  }
+  .compact-bar-wrap {
+    flex: 1;
+    min-width: 80px;
+    height: 14px;
+    background: #0f172a;
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+  }
+  .compact-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+  }
+  .compact-bar-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 600;
+    color: #e2e8f0;
+    text-shadow: 0 0 3px rgba(0,0,0,0.8);
+  }
+  .compact-users {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .compact-users .user-tag { font-size: 10px; padding: 1px 6px; }
+  .compact-users .user-mem { font-size: 9px; }
 </style>
 </head>
 <body>
@@ -436,24 +485,35 @@ function renderProcessUsers(processes, hostUser) {
   return `<div class="gpu-users">${tags}</div>`;
 }
 
+function renderCompactUsers(processes, hostUser) {
+  if (!processes || !processes.length) return '<div class="compact-users"></div>';
+  const userMem = {};
+  for (const p of processes) {
+    const u = p.user || 'unknown';
+    userMem[u] = (userMem[u] || 0) + (p.gpu_memory_mb || 0);
+  }
+  const tags = Object.entries(userMem).map(([user, mem]) => {
+    const isCurrent = user === hostUser;
+    const cls = isCurrent ? 'user-tag current-user' : 'user-tag';
+    return `<span class="${cls}">${user}<span class="user-mem">${formatMB(mem)}</span></span>`;
+  }).join('');
+  return `<div class="compact-users">${tags}</div>`;
+}
+
 function renderGPU(gpu, hostUser) {
   const memPct = gpu.memory_usage_pct;
   const gpuPct = gpu.gpu_utilization_pct;
 
   if (currentMode === 'compact') {
-    // Compact: only GPU name, memory bar, and users
+    const userTags = renderCompactUsers(gpu.processes, hostUser);
     return `
-      <div class="gpu-item">
-        <div class="gpu-title">
-          <span class="gpu-name">GPU ${gpu.index}: ${gpu.name}</span>
-          <span style="font-size:12px;color:#94a3b8">${formatMB(gpu.memory_used_mb)} / ${formatMB(gpu.memory_total_mb)}</span>
+      <div class="compact-gpu-row">
+        <span class="compact-gpu-label">GPU ${gpu.index}</span>
+        <div class="compact-bar-wrap">
+          <div class="compact-bar-fill ${usageClass(memPct)}" style="width:${memPct}%"></div>
+          <div class="compact-bar-text">${formatMB(gpu.memory_used_mb)} / ${formatMB(gpu.memory_total_mb)}</div>
         </div>
-        <div class="bar-container" style="margin-bottom:0">
-          <div class="bar-track">
-            <div class="bar-fill ${usageClass(memPct)}" style="width:${memPct}%"></div>
-          </div>
-        </div>
-        ${renderProcessUsers(gpu.processes, hostUser)}
+        ${userTags}
       </div>
     `;
   }
