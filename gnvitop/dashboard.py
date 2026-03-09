@@ -6,6 +6,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>gnvitop</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='12' y='12' width='40' height='40' rx='6' fill='%231e293b' stroke='%2360a5fa' stroke-width='3'/%3E%3Crect x='8' y='20' width='4' height='4' rx='1' fill='%234ade80'/%3E%3Crect x='8' y='28' width='4' height='4' rx='1' fill='%234ade80'/%3E%3Crect x='8' y='36' width='4' height='4' rx='1' fill='%234ade80'/%3E%3Crect x='52' y='20' width='4' height='4' rx='1' fill='%234ade80'/%3E%3Crect x='52' y='28' width='4' height='4' rx='1' fill='%234ade80'/%3E%3Crect x='52' y='36' width='4' height='4' rx='1' fill='%234ade80'/%3E%3Crect x='24' y='8' width='4' height='4' rx='1' fill='%234ade80'/%3E%3Crect x='32' y='8' width='4' height='4' rx='1' fill='%234ade80'/%3E%3Crect x='24' y='52' width='4' height='4' rx='1' fill='%234ade80'/%3E%3Crect x='32' y='52' width='4' height='4' rx='1' fill='%234ade80'/%3E%3Cpolyline points='20,38 26,30 31,35 37,22 44,32' fill='none' stroke='%2360a5fa' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -340,7 +341,23 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 <body>
 
 <div class="header">
-  <h1>gnvitop</h1>
+  <h1>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="32" height="32" style="vertical-align: middle; margin-right: 10px;">
+      <rect x="12" y="12" width="40" height="40" rx="6" fill="#1e293b" stroke="#60a5fa" stroke-width="3"/>
+      <rect x="8" y="20" width="4" height="4" rx="1" fill="#4ade80"/>
+      <rect x="8" y="28" width="4" height="4" rx="1" fill="#4ade80"/>
+      <rect x="8" y="36" width="4" height="4" rx="1" fill="#4ade80"/>
+      <rect x="52" y="20" width="4" height="4" rx="1" fill="#4ade80"/>
+      <rect x="52" y="28" width="4" height="4" rx="1" fill="#4ade80"/>
+      <rect x="52" y="36" width="4" height="4" rx="1" fill="#4ade80"/>
+      <rect x="24" y="8" width="4" height="4" rx="1" fill="#4ade80"/>
+      <rect x="32" y="8" width="4" height="4" rx="1" fill="#4ade80"/>
+      <rect x="24" y="52" width="4" height="4" rx="1" fill="#4ade80"/>
+      <rect x="32" y="52" width="4" height="4" rx="1" fill="#4ade80"/>
+      <polyline points="20,38 26,30 31,35 37,22 44,32" fill="none" stroke="#60a5fa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    gnvitop
+  </h1>
   <div class="header-right">
     <span class="status-text" id="update-time"></span>
     <div class="mode-toggle" id="mode-toggle">
