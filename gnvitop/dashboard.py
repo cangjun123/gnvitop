@@ -569,6 +569,47 @@ async function fetchData(force) {
   return await resp.json();
 }
 
+// SSE-based streaming init: renders each host as it arrives
+function initStream() {
+  const es = new EventSource('/api/stream');
+  const streamingHosts = [];
+  let receivedDone = false;
+
+  es.onmessage = function(e) {
+    const msg = JSON.parse(e.data);
+    if (msg.done) {
+      receivedDone = true;
+      es.close();
+      // Replace lastData with complete sorted set from cache
+      lastData = { hosts: streamingHosts, updated_at: msg.updated_at };
+      updateTime(msg.updated_at);
+      renderSummary(streamingHosts);
+      renderHosts(streamingHosts);
+      return;
+    }
+    streamingHosts.push(msg.host);
+    // Re-render incrementally as hosts arrive
+    renderSummary(streamingHosts);
+    renderHosts(streamingHosts);
+  };
+
+  es.onerror = function() {
+    es.close();
+    if (!receivedDone && streamingHosts.length === 0) {
+      // SSE failed before any data — fall back to regular fetch
+      fetchData(false).then(data => {
+        lastData = data;
+        renderSummary(data.hosts);
+        renderHosts(data.hosts);
+        updateTime(data.updated_at);
+      }).catch(() => {
+        document.getElementById('content').innerHTML =
+          '<div class="loading" style="color:#f87171">Failed to connect to server.</div>';
+      });
+    }
+  };
+}
+
 async function refresh() {
   const btn = document.getElementById('btn-refresh');
   btn.disabled = true;
@@ -592,15 +633,20 @@ function updateTime(ts) {
 }
 
 async function init() {
+  // Try fast-path: if cache is warm, show data instantly then start SSE for next full refresh
   try {
-    lastData = await fetchData(false);
-    renderSummary(lastData.hosts);
-    renderHosts(lastData.hosts);
-    updateTime(lastData.updated_at);
-  } catch (e) {
-    document.getElementById('content').innerHTML =
-      '<div class="loading" style="color:#f87171">Failed to connect to server.</div>';
-  }
+    const cached = await fetchData(false);
+    if (cached.hosts && cached.hosts.length > 0 && cached.updated_at > 0) {
+      lastData = cached;
+      renderSummary(cached.hosts);
+      renderHosts(cached.hosts);
+      updateTime(cached.updated_at);
+      return; // cache was warm, no need for SSE on initial load
+    }
+  } catch (e) { /* ignore, fall through to SSE */ }
+
+  // Cache empty or unavailable — use SSE for progressive load
+  initStream();
 }
 
 function setupAutoRefresh() {
