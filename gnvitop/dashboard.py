@@ -320,21 +320,21 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     color: #e2e8f0;
   }
 
+  /* Mode transition animation */
+  .host-card {
+    animation: fadeSlideIn 0.3s ease;
+  }
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
   /* Compact mode */
-  body.compact .summary-bar { margin-bottom: 16px; }
-  body.compact .summary-card { padding: 10px 16px; min-width: 120px; }
-  body.compact .summary-card .value { font-size: 22px; }
-  body.compact .host-grid { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 10px; }
+  body.compact .host-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
   body.compact .host-header { padding: 10px 14px; }
-  body.compact .host-name { font-size: 14px; }
   body.compact .host-body { padding: 8px 14px; }
   body.compact .gpu-item { padding: 6px 0; }
-  body.compact .gpu-title { margin-bottom: 6px; }
-  body.compact .gpu-name { font-size: 12px; }
-  body.compact .gpu-stats { display: none; }
-  body.compact .bar-track { height: 6px; }
-  body.compact .bar-container { margin-bottom: 4px; }
-  body.compact .bar-label { font-size: 11px; margin-bottom: 2px; }
+  body.compact .gpu-title { margin-bottom: 4px; }
   body.compact .gpu-users { margin-top: 4px; }
 </style>
 </head>
@@ -363,15 +363,19 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 
 <script>
 let autoRefreshTimer = null;
+let currentMode = 'normal';
+let lastData = null;
 
 function setMode(mode) {
+  currentMode = mode;
   document.body.classList.toggle('compact', mode === 'compact');
   document.getElementById('mode-normal').classList.toggle('active', mode === 'normal');
   document.getElementById('mode-compact').classList.toggle('active', mode === 'compact');
   localStorage.setItem('gnvitop-mode', mode);
+  if (lastData) { renderSummary(lastData.hosts); renderHosts(lastData.hosts); }
 }
-// Restore saved mode
-setMode(localStorage.getItem('gnvitop-mode') || 'normal');
+currentMode = localStorage.getItem('gnvitop-mode') || 'normal';
+setMode(currentMode);
 
 function usageClass(pct) {
   if (pct < 50) return 'usage-low';
@@ -435,6 +439,26 @@ function renderProcessUsers(processes, hostUser) {
 function renderGPU(gpu, hostUser) {
   const memPct = gpu.memory_usage_pct;
   const gpuPct = gpu.gpu_utilization_pct;
+
+  if (currentMode === 'compact') {
+    // Compact: only GPU name, memory bar, and users
+    return `
+      <div class="gpu-item">
+        <div class="gpu-title">
+          <span class="gpu-name">GPU ${gpu.index}: ${gpu.name}</span>
+          <span style="font-size:12px;color:#94a3b8">${formatMB(gpu.memory_used_mb)} / ${formatMB(gpu.memory_total_mb)}</span>
+        </div>
+        <div class="bar-container" style="margin-bottom:0">
+          <div class="bar-track">
+            <div class="bar-fill ${usageClass(memPct)}" style="width:${memPct}%"></div>
+          </div>
+        </div>
+        ${renderProcessUsers(gpu.processes, hostUser)}
+      </div>
+    `;
+  }
+
+  // Normal: full details
   return `
     <div class="gpu-item">
       <div class="gpu-title">
@@ -526,10 +550,10 @@ async function refresh() {
   btn.disabled = true;
   btn.textContent = 'Refreshing...';
   try {
-    const data = await fetchData(true);
-    renderSummary(data.hosts);
-    renderHosts(data.hosts);
-    updateTime(data.updated_at);
+    lastData = await fetchData(true);
+    renderSummary(lastData.hosts);
+    renderHosts(lastData.hosts);
+    updateTime(lastData.updated_at);
   } catch (e) {
     console.error(e);
   } finally {
@@ -545,10 +569,10 @@ function updateTime(ts) {
 
 async function init() {
   try {
-    const data = await fetchData(false);
-    renderSummary(data.hosts);
-    renderHosts(data.hosts);
-    updateTime(data.updated_at);
+    lastData = await fetchData(false);
+    renderSummary(lastData.hosts);
+    renderHosts(lastData.hosts);
+    updateTime(lastData.updated_at);
   } catch (e) {
     document.getElementById('content').innerHTML =
       '<div class="loading" style="color:#f87171">Failed to connect to server.</div>';
@@ -559,6 +583,7 @@ function setupAutoRefresh() {
   const checkbox = document.getElementById('auto-refresh');
   function doRefresh() {
     fetchData(false).then(data => {
+      lastData = data;
       renderSummary(data.hosts);
       renderHosts(data.hosts);
       updateTime(data.updated_at);
