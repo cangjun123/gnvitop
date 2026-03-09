@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Linwei94/gnvitop/main/assets/logo.svg" width="80" alt="gnvitop logo">
+  <img src="assets/logo.svg" width="80" alt="gnvitop logo">
 </p>
 
 <h1 align="center">gnvitop</h1>
