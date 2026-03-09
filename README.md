@@ -1,6 +1,19 @@
-# gnvitop
+<p align="center">
+  <img src="assets/logo.svg" width="80" alt="gnvitop logo">
+</p>
 
-**Global nvitop** --- a web-based GPU monitoring dashboard that monitors **all** your remote GPU servers from a single page.
+<h1 align="center">gnvitop</h1>
+
+<p align="center">
+  <strong>Global nvitop</strong> — a web-based GPU monitoring dashboard that monitors <strong>all</strong> your remote GPU servers from a single page.
+</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/gnvitop/"><img src="https://img.shields.io/pypi/v/gnvitop?color=blue" alt="PyPI"></a>
+  <a href="https://pypi.org/project/gnvitop/"><img src="https://img.shields.io/pypi/pyversions/gnvitop" alt="Python"></a>
+  <a href="https://github.com/Linwei94/gnvitop/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Linwei94/gnvitop" alt="License"></a>
+</p>
+
 ![960cd5fae22199ece06060e7ec8862a4](https://github.com/user-attachments/assets/2ca35564-c891-4af9-9b30-5ebb0949ba99)
 
 
@@ -19,12 +32,22 @@ gnvitop
 4. Displays everything in a real-time web dashboard with **current user highlight**
 5. Auto-refreshes every 30 seconds
 
-```
-                          ┌──> localhost (nvidia-smi) ──> Local GPUs
-gnvitop ──> Browser ──>  ├──> Server A (nvidia-smi) ──> 4x A100
-                          ├──> Server B (nvidia-smi) ──> 8x V100
-                          ├──> Server C (nvidia-smi) ──> 2x RTX 4090
-                          └──> Server D ──> offline
+```mermaid
+graph LR
+    A[gnvitop] --> B[Browser]
+    B --> C["localhost — Local GPUs"]
+    B --> D["Server A — 4x A100"]
+    B --> E["Server B — 8x V100"]
+    B --> F["Server C — 2x RTX 4090"]
+    B --> G["Server D — offline"]
+
+    style A fill:#7c3aed,stroke:none,color:#fff,font-weight:bold
+    style B fill:#2563eb,stroke:none,color:#fff
+    style C fill:#16a34a,stroke:none,color:#fff
+    style D fill:#16a34a,stroke:none,color:#fff
+    style E fill:#16a34a,stroke:none,color:#fff
+    style F fill:#16a34a,stroke:none,color:#fff
+    style G fill:#dc2626,stroke:none,color:#fff
 ```
 
 ## Installation
