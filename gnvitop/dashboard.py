@@ -509,7 +509,8 @@ function renderHosts(hosts) {
     return;
   }
 
-  container.innerHTML = '<div class="host-grid">' + hosts.map(host => {
+  const filtered = currentMode === 'compact' ? hosts.filter(h => h.status === 'ok') : hosts;
+  container.innerHTML = '<div class="host-grid">' + filtered.map(host => {
     let body = '';
     if (host.status === 'ok') {
       body = host.gpus.map(g => renderGPU(g, host.user)).join('');
