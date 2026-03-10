@@ -100,7 +100,8 @@ Host gpu-server-02
 - **User highlight** -- your own processes are highlighted in blue for quick identification
 - **Auto browser** -- opens dashboard in your browser on start
 - **Real-time** -- 30s auto-refresh with manual refresh button
-- **Concurrent** -- queries all servers in parallel (10 workers)
+- **Concurrent** -- queries all servers in parallel (20 workers)
+- **Fast loading** -- background cache warming so the dashboard loads instantly; SSE streaming shows each server as it responds
 - **Cached** -- 30s cache to avoid hammering your servers
 - **Dark UI** -- clean, responsive dark-themed dashboard
 - **At a glance** -- summary bar shows online hosts, total GPUs, idle GPUs, free memory
