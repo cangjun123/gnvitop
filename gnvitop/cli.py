@@ -128,9 +128,14 @@ def main():
 
     # Suppress Flask/Werkzeug startup banner (we already printed our own)
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
-    os.environ["WERKZEUG_RUN_MAIN"] = "true"
 
-    app.run(host=host, port=args.port, debug=False)
+    import click
+    _original_echo = click.echo
+    click.echo = lambda *a, **kw: None
+    try:
+        app.run(host=host, port=args.port, debug=False)
+    finally:
+        click.echo = _original_echo
 
 
 if __name__ == "__main__":
