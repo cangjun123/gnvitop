@@ -2,6 +2,7 @@
 """CLI entry point for gnvitop."""
 
 import argparse
+import logging
 import os
 import webbrowser
 import threading
@@ -87,6 +88,10 @@ def main():
 
     if not args.no_browser and not is_ssh:
         threading.Timer(1.0, lambda: webbrowser.open(display_url)).start()
+
+    # Suppress Flask/Werkzeug startup banner (we already printed our own)
+    logging.getLogger("werkzeug").setLevel(logging.ERROR)
+    os.environ["WERKZEUG_RUN_MAIN"] = "true"
 
     app.run(host=host, port=args.port, debug=False)
 
