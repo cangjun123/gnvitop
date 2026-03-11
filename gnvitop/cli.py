@@ -4,8 +4,42 @@
 import argparse
 import logging
 import os
+import signal
+import socket
 import webbrowser
 import threading
+
+
+def _kill_stale_gnvitop(port):
+    """If the port is occupied by a previous gnvitop process, kill it."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        sock.bind(("0.0.0.0", port))
+        sock.close()
+        return  # Port is free
+    except OSError:
+        pass  # Port is in use
+
+    # Find the PID holding the port (Linux only, via /proc)
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["ss", "-tlnp", f"sport = :{port}"],
+            capture_output=True, text=True,
+        )
+        for line in result.stdout.splitlines():
+            if f":{port}" in line and "gnvitop" in line:
+                # Extract pid from pid=XXXX
+                for part in line.split(","):
+                    if part.startswith("pid="):
+                        pid = int(part.split("=")[1])
+                        os.kill(pid, signal.SIGTERM)
+                        print(f"Killed previous gnvitop (PID {pid}) on port {port}")
+                        import time
+                        time.sleep(0.5)
+                        return
+    except Exception:
+        pass
 
 
 def main():
@@ -59,6 +93,9 @@ def main():
     if args.ssh_config:
         from . import server
         server.SSH_CONFIG_PATH = args.ssh_config
+
+    # Kill stale gnvitop process if it's holding the port
+    _kill_stale_gnvitop(args.port)
 
     from .server import app
 
