@@ -343,7 +343,10 @@ _start_background_warmer()
 
 @app.route("/")
 def index():
-    return Response(DASHBOARD_HTML, mimetype="text/html")
+    import socket
+    host_info = f"{getpass.getuser()}@{socket.gethostname()}"
+    html = DASHBOARD_HTML.replace("{{GNVITOP_HOST_INFO}}", host_info)
+    return Response(html, mimetype="text/html")
 
 
 @app.route("/api/gpus")
