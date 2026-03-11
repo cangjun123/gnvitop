@@ -73,34 +73,20 @@ def main():
     if is_ssh and not user_set_host:
         host = "0.0.0.0"
 
-    print(f"gnvitop v{__version__} starting...")
-    print(f"Reading SSH config from: {ssh_config}")
-
     if is_ssh:
         # SSH_CONNECTION format: client_ip client_port server_ip server_port
         ssh_conn = os.environ.get("SSH_CONNECTION", "")
         parts = ssh_conn.split()
         server_ip = parts[2] if len(parts) >= 3 else "this_server_ip"
-
-        access_url = f"http://{server_ip}:{args.port}"
-        print()
-        print(f"  SSH session detected — dashboard is accessible at:")
-        print(f"  \033[1;36m{access_url}\033[0m")
-        print()
-        print(f"  If the above URL is not reachable (e.g. behind a firewall),")
-        print(f"  set up port forwarding from your local machine:")
-        print(f"    ssh -L {args.port}:127.0.0.1:{args.port} {server_ip}")
-        print(f"  Then open http://localhost:{args.port}")
+        display_url = f"http://{server_ip}:{args.port}"
     else:
-        url = f"http://{host}:{args.port}"
-        print(f"  Dashboard: \033[1;36m{url}\033[0m")
+        display_url = f"http://{host}:{args.port}"
 
-    print()
+    print(f"gnvitop v{__version__} — \033[1;36m{display_url}\033[0m")
     print("Press Ctrl+C to stop.\n")
 
     if not args.no_browser and not is_ssh:
-        url = f"http://{host}:{args.port}"
-        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+        threading.Timer(1.0, lambda: webbrowser.open(display_url)).start()
 
     app.run(host=host, port=args.port, debug=False)
 
