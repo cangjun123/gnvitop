@@ -69,22 +69,22 @@ def main():
         help="Path to SSH config file (default: ~/.ssh/config)",
     )
     parser.add_argument(
+        "--history",
+        action="store_true",
+        help="Enable GPU history recording to CSV",
+    )
+    parser.add_argument(
         "--csv",
         default=None,
         metavar="PATH",
-        help="CSV file path for GPU history (default: /tmp/gnvitop_history.csv)",
-    )
-    parser.add_argument(
-        "--no-history",
-        action="store_true",
-        help="Disable GPU history recording",
+        help="CSV file path for GPU history (default: /tmp/gnvitop_history.csv, requires --history)",
     )
     parser.add_argument(
         "--interval",
         type=int,
         default=600,
         metavar="SECONDS",
-        help="Sampling interval for history recording in seconds (default: 600)",
+        help="Sampling interval for history recording in seconds (default: 600, requires --history)",
     )
     parser.add_argument(
         "-v", "--version",
@@ -144,8 +144,8 @@ def main():
     if not args.no_browser and not is_ssh:
         threading.Timer(1.0, lambda: webbrowser.open(display_url)).start()
 
-    # Start history sampler
-    if not args.no_history:
+    # Start history sampler (opt-in via --history)
+    if args.history:
         from .db import init_db, set_csv_path, start_sampler
         from .server import fetch_all_gpu_info
         if args.csv:
