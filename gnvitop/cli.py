@@ -69,6 +69,24 @@ def main():
         help="Path to SSH config file (default: ~/.ssh/config)",
     )
     parser.add_argument(
+        "--db",
+        default=None,
+        metavar="PATH",
+        help="SQLite database path for GPU history (default: ~/.gnvitop.db)",
+    )
+    parser.add_argument(
+        "--no-db",
+        action="store_true",
+        help="Disable GPU history recording",
+    )
+    parser.add_argument(
+        "--db-interval",
+        type=int,
+        default=600,
+        metavar="SECONDS",
+        help="Sampling interval for database recording in seconds (default: 600)",
+    )
+    parser.add_argument(
         "-v", "--version",
         action="store_true",
         help="Show version and exit",
@@ -125,6 +143,15 @@ def main():
 
     if not args.no_browser and not is_ssh:
         threading.Timer(1.0, lambda: webbrowser.open(display_url)).start()
+
+    # Start database sampler
+    if not args.no_db:
+        from .db import init_db, set_db_path, start_sampler
+        from .server import fetch_all_gpu_info
+        if args.db:
+            set_db_path(args.db)
+        init_db()
+        start_sampler(args.db_interval, fetch_all_gpu_info)
 
     # Suppress Flask/Werkzeug startup banner (we already printed our own)
     logging.getLogger("werkzeug").setLevel(logging.ERROR)

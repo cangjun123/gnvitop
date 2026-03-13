@@ -33,8 +33,9 @@ _PROC_QUERY = (
     r" | while read gpu pid type mem cmd; do"
     r' if [ "$pid" != "-" ]; then'
     r" user=$(ps -o user= -p $pid 2>/dev/null | tr -d ' ');"
+    r" comm=$(ps -o comm= -p $pid 2>/dev/null | tr -d ' ');"
     r' [ "$mem" = "-" ] && mem=0;'
-    r' printf "%s,%s,%s,%s\n" "$pid" "$gpu" "$mem" "$user";'
+    r' printf "%s,%s,%s,%s,%s\n" "$pid" "$gpu" "$mem" "$user" "$comm";'
     r" fi; done"
 )
 COMBINED_CMD = f"{_GPU_QUERY}; echo '---SEP---'; {_PROC_QUERY}"
@@ -221,6 +222,7 @@ def _attach_processes(gpus, proc_output):
                 "pid": int(parts[0]),
                 "gpu_memory_mb": float(parts[2]) if parts[2] else 0,
                 "user": user,
+                "command": parts[4] if len(parts) >= 5 else "",
             }
             if gpu_idx in gpu_by_index:
                 gpu_by_index[gpu_idx]["processes"].append(proc)
