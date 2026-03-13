@@ -28,6 +28,9 @@ dependencies = [
     "paramiko>=2.0",
 ]
 
+[project.optional-dependencies]
+supabase = ["supabase>=2.0"]
+
 [project.scripts]
 gnvitop = "gnvitop.cli:main"
 
