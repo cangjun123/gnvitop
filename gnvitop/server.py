@@ -388,7 +388,7 @@ _start_background_warmer()
 def index():
     import socket
     host_info = f"{getpass.getuser()}@{socket.gethostname()}"
-    html = DASHBOARD_HTML.replace("{{GNVITOP_HOST_INFO}}", host_info)
+    html = DASHBOARD_HTML.replace("{{GNVITOP_HOST_INFO}}", host_info).replace("{{GNVITOP_VERSION}}", __version__)
     return Response(html, mimetype="text/html")
 
 
