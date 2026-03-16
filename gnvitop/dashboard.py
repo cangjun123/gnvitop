@@ -126,9 +126,16 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     border: 1px solid #334155;
     border-radius: 12px;
     overflow: hidden;
-    transition: border-color 0.2s;
+    transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s;
   }
-  .host-card:hover { border-color: #475569; }
+  .host-card:hover {
+    border-color: #475569;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  }
+  .host-header:hover {
+    background: rgba(255,255,255,0.03);
+  }
 
   .host-card.status-ok { border-left: 3px solid #22c55e; }
   .host-card.status-no_gpu { border-left: 3px solid #eab308; }
@@ -381,6 +388,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .host-header {
     cursor: pointer;
     user-select: none;
+    transition: background 0.15s;
   }
   .host-header-left {
     display: flex;
