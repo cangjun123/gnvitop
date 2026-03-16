@@ -87,6 +87,18 @@ def main():
         help="Sampling interval for history recording in seconds (default: 600, requires --history)",
     )
     parser.add_argument(
+        "--tui",
+        action="store_true",
+        help="Launch terminal UI (no browser, no web server)",
+    )
+    parser.add_argument(
+        "--tui-refresh",
+        type=int,
+        default=30,
+        metavar="SECONDS",
+        help="TUI auto-refresh interval in seconds (default: 30)",
+    )
+    parser.add_argument(
         "-v", "--version",
         action="store_true",
         help="Show version and exit",
@@ -98,6 +110,15 @@ def main():
 
     if args.version:
         print(f"gnvitop {__version__}")
+        return
+
+    # TUI mode — skip Flask entirely
+    if args.tui:
+        if args.ssh_config:
+            from . import server
+            server.SSH_CONFIG_PATH = args.ssh_config
+        from .tui import run_tui
+        run_tui(ssh_config_path=args.ssh_config, refresh_interval=args.tui_refresh)
         return
 
     # Check SSH config exists

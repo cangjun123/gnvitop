@@ -58,6 +58,18 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   }
   .btn-refresh:hover { background: #334155; border-color: #475569; }
   .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
+  @keyframes refreshPulse {
+    0%   { box-shadow: 0 0 0 0 rgba(96,165,250,0.5); }
+    50%  { box-shadow: 0 0 0 6px rgba(96,165,250,0); background: #1e3a5f; border-color: #60a5fa; }
+    100% { box-shadow: 0 0 0 0 rgba(96,165,250,0); }
+  }
+  .btn-refresh.refreshing { animation: refreshPulse 0.8s ease; }
+
+  /* Drag-and-drop */
+  .host-card.dragging { opacity: 0.4; cursor: grabbing; }
+  .host-card.drag-over { outline: 2px dashed #60a5fa; outline-offset: 2px; }
+  .host-header { cursor: grab; }
+  .host-header:active { cursor: grabbing; }
 
   .summary-bar {
     display: flex;
@@ -90,7 +102,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 
   .host-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
     gap: 16px;
   }
 
@@ -321,8 +333,8 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     color: #e2e8f0;
   }
 
-  /* Mode transition animation */
-  .host-card {
+  /* Initial load animation only */
+  .host-card.first-render {
     animation: fadeSlideIn 0.3s ease;
   }
   @keyframes fadeSlideIn {
@@ -330,12 +342,84 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     to { opacity: 1; transform: translateY(0); }
   }
 
+  /* Interval selector */
+  .interval-select {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    color: #94a3b8;
+    font-size: 12px;
+    padding: 5px 8px;
+    cursor: pointer;
+    outline: none;
+  }
+  .interval-select:hover { border-color: #475569; }
+
   /* Compact mode */
   body.compact .summary-bar { display: none; }
-  body.compact .host-grid { grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 12px; }
+  body.compact .host-grid { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 12px; }
   body.compact .host-header { padding: 12px 16px; }
   body.compact .host-info { display: none; }
   body.compact .host-body { padding: 12px 16px; }
+
+  /* Collapse */
+  .host-header {
+    cursor: pointer;
+    user-select: none;
+  }
+  .host-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .host-header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .collapse-arrow {
+    font-size: 11px;
+    color: #475569;
+    transition: transform 0.2s;
+    display: inline-block;
+  }
+  .host-card.collapsed .collapse-arrow { transform: rotate(-90deg); }
+  .host-card.collapsed .host-body { display: none; }
+  .host-card.collapsed .host-header { border-bottom: none; }
+  .collapsed-info {
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 2px;
+  }
+
+  /* Folded section divider */
+  .folded-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 28px 0 16px;
+  }
+  .folded-divider::before,
+  .folded-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #334155;
+  }
+  .folded-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    white-space: nowrap;
+  }
+  .host-grid-folded .host-card { opacity: 0.75; }
+  .host-grid-folded .host-card:hover { opacity: 1; }
+
+
 </style>
 </head>
 <body>
@@ -357,13 +441,19 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   <div class="header-right">
     <span class="status-text" id="update-time"></span>
     <div class="mode-toggle" id="mode-toggle">
-      <button onclick="setMode('normal')" id="mode-normal">Normal</button>
       <button onclick="setMode('compact')" id="mode-compact">Compact</button>
+      <button onclick="setMode('normal')" id="mode-normal">Normal</button>
     </div>
     <label class="auto-refresh-toggle">
       <input type="checkbox" id="auto-refresh" checked>
-      Auto (30s)
+      Auto
     </label>
+    <select class="interval-select" id="interval-select" onchange="setInterval_(this.value)">
+      <option value="5">5s</option>
+      <option value="10">10s</option>
+      <option value="30" selected>30s</option>
+      <option value="300">5min</option>
+    </select>
     <button class="btn-refresh" id="btn-refresh" onclick="refresh()">Refresh</button>
   </div>
 </div>
@@ -377,6 +467,73 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 let autoRefreshTimer = null;
 let currentMode = 'normal';
 let lastData = null;
+let isFirstRender = true;
+let refreshIntervalSecs = parseInt(localStorage.getItem('gnvitop-interval') || '30');
+let hostOrder = JSON.parse(localStorage.getItem('gnvitop-order') || '[]'); // pinned manual order
+
+function _applyHostOrder(list) {
+  if (!hostOrder.length) return list;
+  const orderMap = {};
+  hostOrder.forEach((alias, i) => { orderMap[alias] = i; });
+  return [...list].sort((a, b) => {
+    const ai = orderMap[a.alias] ?? 9999;
+    const bi = orderMap[b.alias] ?? 9999;
+    return ai - bi;
+  });
+}
+
+function _setupDrag(grid) {
+  let dragSrc = null;
+  grid.querySelectorAll('.host-card').forEach(card => {
+    card.setAttribute('draggable', 'true');
+    card.addEventListener('dragstart', e => {
+      dragSrc = card;
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      grid.querySelectorAll('.host-card').forEach(c => c.classList.remove('drag-over'));
+      // Save new order
+      hostOrder = [...grid.querySelectorAll('.host-card')].map(c => c.dataset.alias);
+      localStorage.setItem('gnvitop-order', JSON.stringify(hostOrder));
+    });
+    card.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (card !== dragSrc) {
+        grid.querySelectorAll('.host-card').forEach(c => c.classList.remove('drag-over'));
+        card.classList.add('drag-over');
+      }
+    });
+    card.addEventListener('drop', e => {
+      e.preventDefault();
+      if (dragSrc && dragSrc !== card) {
+        const cards = [...grid.querySelectorAll('.host-card')];
+        const srcIdx = cards.indexOf(dragSrc);
+        const dstIdx = cards.indexOf(card);
+        if (srcIdx < dstIdx) {
+          grid.insertBefore(dragSrc, card.nextSibling);
+        } else {
+          grid.insertBefore(dragSrc, card);
+        }
+      }
+    });
+  });
+}
+let collapsedHosts = new Set(JSON.parse(localStorage.getItem('gnvitop-collapsed') || '[]'));
+
+function toggleCollapse(alias) {
+  if (collapsedHosts.has(alias)) { collapsedHosts.delete(alias); } else { collapsedHosts.add(alias); }
+  localStorage.setItem('gnvitop-collapsed', JSON.stringify([...collapsedHosts]));
+  if (lastData) renderHosts(lastData.hosts);
+}
+
+function setInterval_(secs) {
+  refreshIntervalSecs = parseInt(secs);
+  localStorage.setItem('gnvitop-interval', secs);
+  setupAutoRefresh();
+}
 
 function setMode(mode) {
   currentMode = mode;
@@ -388,6 +545,15 @@ function setMode(mode) {
 }
 currentMode = localStorage.getItem('gnvitop-mode') || 'normal';
 setMode(currentMode);
+
+// Restore interval selector
+(function() {
+  const sel = document.getElementById('interval-select');
+  if (sel) {
+    const saved = localStorage.getItem('gnvitop-interval');
+    if (saved) { sel.value = saved; refreshIntervalSecs = parseInt(saved); }
+  }
+})();
 
 function usageClass(pct) {
   if (pct < 50) return 'usage-low';
@@ -519,21 +685,38 @@ function renderGPU(gpu, hostUser) {
 function renderHosts(hosts) {
   const container = document.getElementById('content');
   if (!hosts.length) {
+    if (isFirstRender) return; // keep showing the initial loading spinner
     container.innerHTML = '<div class="loading">No hosts found in SSH config.</div>';
     return;
   }
 
-  const filtered = currentMode === 'compact' ? hosts.filter(h => h.status === 'ok') : hosts;
+  let filtered = currentMode === 'compact' ? hosts.filter(h => h.status === 'ok') : hosts;
 
-  // Sort: hosts where current user has GPU processes first
+  // Apply manual drag order if set, otherwise auto-sort
+  if (hostOrder.length) {
+    filtered = _applyHostOrder(filtered);
+    // Still put collapsed at end within their manual position is preserved
+  } else {
+  // Sort: active user first, then normal, collapsed always last
   filtered.sort((a, b) => {
+    const aCollapsed = collapsedHosts.has(a.alias);
+    const bCollapsed = collapsedHosts.has(b.alias);
+    if (aCollapsed !== bCollapsed) return aCollapsed - bCollapsed;
     const aHasMe = a.status === 'ok' && a.gpus.some(g => g.processes && g.processes.some(p => p.user === a.user));
     const bHasMe = b.status === 'ok' && b.gpus.some(g => g.processes && g.processes.some(p => p.user === b.user));
     if (aHasMe !== bHasMe) return bHasMe - aHasMe;
     return 0;
   });
+  } // end else (no manual order)
 
-  container.innerHTML = '<div class="host-grid">' + filtered.map(host => {
+
+  const wasFirst = isFirstRender;
+  isFirstRender = false;
+
+  const expanded  = filtered.filter(h => !collapsedHosts.has(h.alias));
+  const collapsed = filtered.filter(h =>  collapsedHosts.has(h.alias));
+
+  function renderCard(host) {
     let body = '';
     if (host.status === 'ok') {
       body = host.gpus.map(g => renderGPU(g, host.user)).join('');
@@ -542,25 +725,47 @@ function renderHosts(hosts) {
     } else {
       body = `<div class="error-msg">${host.error || 'Unknown error'}</div>`;
     }
-
-    const isLocal = host.is_local;
+    const isLocal    = host.is_local;
+    const isCollapsed = collapsedHosts.has(host.alias);
     const badgeClass = isLocal ? 'badge-local' : host.status === 'ok' ? 'badge-ok' : host.status === 'no_gpu' ? 'badge-no_gpu' : 'badge-error';
-    const badgeText = isLocal ? 'Local' : host.status === 'ok' ? 'Online' : host.status === 'no_gpu' ? 'No GPU' : 'Offline';
-    const cardClass = `host-card status-${host.status}${isLocal ? ' is-local' : ''}`;
-
+    const badgeText  = isLocal ? 'Local' : host.status === 'ok' ? 'Online' : host.status === 'no_gpu' ? 'No GPU' : 'Offline';
+    const cardClass  = `host-card status-${host.status}${isLocal ? ' is-local' : ''}${isCollapsed ? ' collapsed' : ''}${wasFirst ? ' first-render' : ''}`;
+    const collapsedInfo = (isCollapsed && host.status === 'ok')
+      ? `<div class="collapsed-info">${host.gpus.length} GPU${host.gpus.length !== 1 ? 's' : ''} &nbsp;·&nbsp; Free: ${formatMB(host.gpus.reduce((s, g) => s + g.memory_free_mb, 0))}</div>`
+      : '';
+    const alias = host.alias.replace(/'/g, "\\'");
     return `
-      <div class="${cardClass}">
-        <div class="host-header">
-          <div>
-            <div class="host-name">${host.alias}</div>
-            <div class="host-info">${host.user}@${host.hostname}${host.port ? ':' + host.port : ''}</div>
+      <div class="${cardClass}" data-alias="${alias}">
+        <div class="host-header" onclick="toggleCollapse('${alias}')">
+          <div class="host-header-left">
+            <div>
+              <div class="host-name">${host.alias}</div>
+              <div class="host-info">${host.user}@${host.hostname}${host.port ? ':' + host.port : ''}</div>
+              ${collapsedInfo}
+            </div>
           </div>
-          <span class="status-badge ${badgeClass}">${badgeText}</span>
+          <div class="host-header-right">
+            <span class="status-badge ${badgeClass}">${badgeText}</span>
+            <span class="collapse-arrow">&#9660;</span>
+          </div>
         </div>
         <div class="host-body">${body}</div>
       </div>
     `;
-  }).join('') + '</div>';
+  }
+
+  let html = '<div class="host-grid">' + expanded.map(renderCard).join('') + '</div>';
+
+  if (collapsed.length) {
+    html += `
+      <div class="folded-divider">
+        <span class="folded-label">&#9660; Folded (${collapsed.length})</span>
+      </div>
+      <div class="host-grid host-grid-folded">` + collapsed.map(renderCard).join('') + '</div>';
+  }
+
+  container.innerHTML = html;
+  container.querySelectorAll('.host-grid').forEach(g => _setupDrag(g));
 }
 
 async function fetchData(force) {
@@ -610,10 +815,19 @@ function initStream() {
   };
 }
 
+function flashRefreshBtn() {
+  const btn = document.getElementById('btn-refresh');
+  btn.classList.remove('refreshing');
+  void btn.offsetWidth; // reflow to restart animation
+  btn.classList.add('refreshing');
+  setTimeout(() => btn.classList.remove('refreshing'), 900);
+}
+
 async function refresh() {
   const btn = document.getElementById('btn-refresh');
   btn.disabled = true;
   btn.textContent = 'Refreshing...';
+  flashRefreshBtn();
   try {
     lastData = await fetchData(true);
     renderSummary(lastData.hosts);
@@ -650,8 +864,10 @@ async function init() {
 }
 
 function setupAutoRefresh() {
+  clearInterval(autoRefreshTimer);
   const checkbox = document.getElementById('auto-refresh');
   function doRefresh() {
+    flashRefreshBtn();
     fetchData(false).then(data => {
       lastData = data;
       renderSummary(data.hosts);
@@ -659,14 +875,15 @@ function setupAutoRefresh() {
       updateTime(data.updated_at);
     }).catch(() => {});
   }
-  checkbox.addEventListener('change', () => {
+  if (checkbox.checked) {
+    autoRefreshTimer = setInterval(doRefresh, refreshIntervalSecs * 1000);
+  }
+  checkbox.onchange = () => {
+    clearInterval(autoRefreshTimer);
     if (checkbox.checked) {
-      autoRefreshTimer = setInterval(doRefresh, 30000);
-    } else {
-      clearInterval(autoRefreshTimer);
+      autoRefreshTimer = setInterval(doRefresh, refreshIntervalSecs * 1000);
     }
-  });
-  autoRefreshTimer = setInterval(doRefresh, 30000);
+  };
 }
 
 init();

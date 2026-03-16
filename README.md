@@ -64,6 +64,8 @@ gnvitop -p 8080                      # custom port
 gnvitop --host 0.0.0.0              # expose to LAN
 gnvitop --no-browser                 # don't auto-open browser
 gnvitop --ssh-config /path/to/config # custom SSH config
+gnvitop --tui                        # terminal UI mode (no browser)
+gnvitop --tui --tui-refresh 10       # TUI with 10s refresh interval
 gnvitop -v                           # show version
 ```
 
@@ -98,11 +100,14 @@ Host gpu-server-02
 - **Local + Remote** -- monitors local GPU alongside all remote servers
 - **Per-GPU users** -- shows which users occupy each GPU and their memory usage
 - **User highlight** -- your own processes are highlighted in blue for quick identification
+- **TUI mode** -- `gnvitop --tui` for a terminal UI (like nvitop) without a browser
 - **Auto browser** -- opens dashboard in your browser on start
-- **Real-time** -- 30s auto-refresh with manual refresh button
+- **Adjustable refresh** -- choose 5s / 10s / 30s / 5min auto-refresh interval
 - **Concurrent** -- queries all servers in parallel (20 workers)
 - **Fast loading** -- background cache warming so the dashboard loads instantly; SSE streaming shows each server as it responds
-- **Cached** -- 30s cache to avoid hammering your servers
+- **Collapse cards** -- fold individual server cards to a compact strip, moved to a separate Folded section
+- **Drag to reorder** -- drag server cards to arrange them in any order, persisted across reloads
+- **Compact / Normal modes** -- toggle between full detail and compact views
 - **Dark UI** -- clean, responsive dark-themed dashboard
 - **At a glance** -- summary bar shows online hosts, total GPUs, idle GPUs, free memory
 - **Color coded** -- green (online), yellow (no GPU), red (offline), blue (local)
@@ -117,7 +122,7 @@ Host gpu-server-02
 | Multiple servers | No | Yes |
 | Show per-GPU users | Yes | Yes |
 | Highlight current user | No | Yes |
-| Interface | Terminal | Web browser |
+| Interface | Terminal | Web browser + Terminal (TUI) |
 | Setup | Run on each server | Run once, reads SSH config |
 
 **gnvitop** is not a replacement for nvitop -- it's a complement. Use nvitop for detailed local process-level GPU monitoring, use gnvitop to get an overview of all your GPU servers (including local) from one place.
