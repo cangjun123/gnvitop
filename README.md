@@ -88,6 +88,12 @@ Host gpu-server-01
 Host gpu-server-02
     HostName 192.168.1.102
     User bob
+
+# ProxyJump (bastion/jump host) is fully supported
+Host compute-node
+    HostName compute-node.internal
+    User alice
+    ProxyJump bastion-host
 ```
 
 2. **SSH key auth** -- password-less login should be set up
@@ -98,6 +104,7 @@ Host gpu-server-02
 - **Zero config** -- reads `~/.ssh/config` automatically, no setup needed
 - **One command** -- `pip install gnvitop && gnvitop`, that's it
 - **Local + Remote** -- monitors local GPU alongside all remote servers
+- **ProxyJump support** -- monitors compute nodes behind bastion/jump hosts (reads `ProxyJump` from SSH config)
 - **Per-GPU users** -- shows which users occupy each GPU and their memory usage
 - **User highlight** -- your own processes are highlighted in blue for quick identification
 - **TUI mode** -- `gnvitop --tui` for a terminal UI (like nvitop) without a browser

@@ -87,6 +87,7 @@ def parse_ssh_config(path):
                     "user": None,
                     "port": 22,
                     "identity_file": None,
+                    "proxy_jump": None,
                 }
                 hosts.append(current)
             elif current is not None:
@@ -98,6 +99,9 @@ def parse_ssh_config(path):
                     current["port"] = int(value)
                 elif key.lower() == "identityfile":
                     current["identity_file"] = os.path.expanduser(value)
+                elif key.lower() == "proxyjump":
+                    # Take only the first jump host (chained jumps not supported)
+                    current["proxy_jump"] = value.split(",")[0].strip()
 
     return hosts
 
@@ -137,8 +141,33 @@ def _build_gpus(gpu_part):
     return gpus
 
 
-def query_gpu(host_info):
-    """SSH into a host and query GPU information (single round trip)."""
+def _make_ssh_client(hostname, port, user, identity_file, sock=None):
+    """Create and connect a paramiko SSHClient."""
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    kwargs = {
+        "hostname": hostname,
+        "port": port,
+        "username": user,
+        "timeout": SSH_TIMEOUT,
+        "banner_timeout": SSH_TIMEOUT,
+        "auth_timeout": SSH_TIMEOUT,
+        "allow_agent": True,
+        "look_for_keys": True,
+    }
+    if identity_file:
+        kwargs["key_filename"] = identity_file
+    if sock is not None:
+        kwargs["sock"] = sock
+    client.connect(**kwargs)
+    return client
+
+
+def query_gpu(host_info, hosts_by_alias=None):
+    """SSH into a host and query GPU information (single round trip).
+
+    hosts_by_alias: dict of alias -> host_info for resolving ProxyJump targets.
+    """
     alias = host_info["alias"]
     hostname = host_info["hostname"] or alias
     user = host_info["user"]
@@ -154,24 +183,29 @@ def query_gpu(host_info):
         "gpus": [],
     }
 
+    jump_client = None
     try:
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        sock = None
+        proxy_alias = host_info.get("proxy_jump")
+        if proxy_alias:
+            # Resolve jump host info
+            jump_info = (hosts_by_alias or {}).get(proxy_alias) or {
+                "alias": proxy_alias,
+                "hostname": proxy_alias,
+                "user": None,
+                "port": 22,
+                "identity_file": None,
+            }
+            jump_host = jump_info.get("hostname") or proxy_alias
+            jump_port = jump_info.get("port", 22)
+            jump_user = jump_info.get("user")
+            jump_key = jump_info.get("identity_file")
+            jump_client = _make_ssh_client(jump_host, jump_port, jump_user, jump_key)
+            sock = jump_client.get_transport().open_channel(
+                "direct-tcpip", (hostname, port), ("", 0)
+            )
 
-        connect_kwargs = {
-            "hostname": hostname,
-            "port": port,
-            "username": user,
-            "timeout": SSH_TIMEOUT,
-            "banner_timeout": SSH_TIMEOUT,
-            "auth_timeout": SSH_TIMEOUT,
-            "allow_agent": True,
-            "look_for_keys": True,
-        }
-        if host_info.get("identity_file"):
-            connect_kwargs["key_filename"] = host_info["identity_file"]
-
-        client.connect(**connect_kwargs)
+        client = _make_ssh_client(hostname, port, user, host_info.get("identity_file"), sock=sock)
 
         # Single exec_command for both GPU stats and process info
         _, stdout, _ = client.exec_command(COMBINED_CMD, timeout=SSH_TIMEOUT)
@@ -204,6 +238,12 @@ def query_gpu(host_info):
         result["error"] = f"Connection failed: {e}"
     except Exception as e:
         result["error"] = f"{type(e).__name__}: {e}"
+    finally:
+        if jump_client:
+            try:
+                jump_client.close()
+            except Exception:
+                pass
 
     return result
 
@@ -290,12 +330,13 @@ def _sort_results(results):
 def fetch_all_gpu_info():
     """Query all hosts (local + remote) concurrently and return sorted results."""
     hosts = parse_ssh_config(SSH_CONFIG_PATH)
+    hosts_by_alias = {h["alias"]: h for h in hosts}
     results = []
 
     with ThreadPoolExecutor(max_workers=20) as executor:
         futures = {executor.submit(query_local_gpu): None}
         for h in hosts:
-            futures[executor.submit(query_gpu, h)] = h
+            futures[executor.submit(query_gpu, h, hosts_by_alias)] = h
         for future in as_completed(futures):
             results.append(future.result())
 
@@ -379,12 +420,13 @@ def api_stream():
     """SSE endpoint: streams each host result as it arrives, then a 'done' event."""
     def generate():
         hosts = parse_ssh_config(SSH_CONFIG_PATH)
+        hosts_by_alias = {h["alias"]: h for h in hosts}
         results = []
 
         with ThreadPoolExecutor(max_workers=20) as executor:
             futures = {executor.submit(query_local_gpu): None}
             for h in hosts:
-                futures[executor.submit(query_gpu, h)] = h
+                futures[executor.submit(query_gpu, h, hosts_by_alias)] = h
 
             for future in as_completed(futures):
                 host_result = future.result()

@@ -1,3 +1,3 @@
 """gnvitop - Global nvitop: web-based GPU monitoring dashboard for remote servers via SSH."""
 
-__version__ = "0.3.2"
+__version__ = "0.3.3"
