@@ -92,8 +92,8 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     background: transparent;
     border: none;
     cursor: pointer;
-    font-size: 22px;
-    padding: 0 8px;
+    font-size: 15px;
+    padding: 0 4px;
     color: #475569;
     transition: color 0.2s, transform 0.2s;
     line-height: 1;
