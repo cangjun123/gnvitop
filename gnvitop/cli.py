@@ -171,7 +171,8 @@ def main():
     # Kill stale gnvitop process if it's holding the port
     _kill_stale_gnvitop(args.port)
 
-    from .server import app
+    from .server import app, _start_background_warmer
+    _start_background_warmer()
 
     # Detect if running inside an SSH session
     is_ssh = bool(os.environ.get("SSH_CONNECTION") or os.environ.get("SSH_TTY"))

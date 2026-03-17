@@ -327,12 +327,62 @@ def _sort_results(results):
     return results
 
 
+def discover_gadi_nodes(hosts_by_alias):
+    """SSH to each gadi-like login node and discover allocated GPU compute nodes via qstat.
+
+    Returns a list of host_info dicts for any active job nodes found.
+    A host is treated as a Gadi login node if its HostName ends with '.nci.org.au'
+    and it has no ProxyJump (i.e. it is itself the jump host).
+    """
+    discovered = []
+    for alias, info in hosts_by_alias.items():
+        hostname = info.get("hostname") or alias
+        if not hostname.endswith(".nci.org.au"):
+            continue
+        if info.get("proxy_jump"):
+            continue  # skip compute nodes, only query login nodes
+        # SSH to login node and run qstat to find allocated nodes
+        try:
+            client = _make_ssh_client(
+                hostname, info.get("port", 22),
+                info.get("user"), info.get("identity_file"),
+            )
+            _, stdout, _ = client.exec_command(
+                "qstat -u $(whoami) -n 2>/dev/null | grep -oE 'gadi-gpu-[a-z0-9-]+' | sort -u",
+                timeout=SSH_TIMEOUT,
+            )
+            node_names = [n.strip() for n in stdout.read().decode().splitlines() if n.strip()]
+            client.close()
+        except Exception:
+            continue
+
+        for node in node_names:
+            node_hostname = f"{node}.gadi.nci.org.au"
+            discovered.append({
+                "alias": node,
+                "hostname": node_hostname,
+                "user": info.get("user"),
+                "port": 22,
+                "identity_file": info.get("identity_file"),
+                "proxy_jump": alias,
+            })
+
+    return discovered
+
+
 def fetch_all_gpu_info():
     """Query all hosts (local + remote) concurrently and return sorted results."""
     hosts = parse_ssh_config(SSH_CONFIG_PATH)
     hosts_by_alias = {h["alias"]: h for h in hosts}
-    results = []
 
+    # Discover dynamically allocated Gadi compute nodes
+    dynamic = discover_gadi_nodes(hosts_by_alias)
+    for h in dynamic:
+        if h["alias"] not in hosts_by_alias:
+            hosts.append(h)
+            hosts_by_alias[h["alias"]] = h
+
+    results = []
     with ThreadPoolExecutor(max_workers=20) as executor:
         futures = {executor.submit(query_local_gpu): None}
         for h in hosts:
@@ -378,10 +428,6 @@ def _start_background_warmer():
 
     t = threading.Thread(target=_warmer, daemon=True)
     t.start()
-
-
-# Start background cache warmer when module is imported
-_start_background_warmer()
 
 
 @app.route("/")
