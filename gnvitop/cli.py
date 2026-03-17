@@ -99,6 +99,11 @@ def main():
         help="TUI auto-refresh interval in seconds (default: 30)",
     )
     parser.add_argument(
+        "--agent",
+        action="store_true",
+        help="Output GPU availability as JSON for agent use, then exit",
+    )
+    parser.add_argument(
         "-v", "--version",
         action="store_true",
         help="Show version and exit",
@@ -110,6 +115,43 @@ def main():
 
     if args.version:
         print(f"gnvitop {__version__}")
+        return
+
+    # Agent mode — fetch once, print JSON, exit
+    if args.agent:
+        if args.ssh_config:
+            from . import server
+            server.SSH_CONFIG_PATH = args.ssh_config
+        import json
+        from .server import fetch_all_gpu_info
+        results = fetch_all_gpu_info()
+        output = []
+        for host in results:
+            if host["status"] != "ok":
+                output.append({
+                    "host": host["alias"],
+                    "status": host["status"],
+                    "error": host.get("error"),
+                    "gpus": [],
+                })
+                continue
+            gpus = []
+            for gpu in host["gpus"]:
+                gpus.append({
+                    "index": gpu["index"],
+                    "name": gpu["name"],
+                    "memory_total_mb": gpu["memory_total_mb"],
+                    "memory_used_mb": gpu["memory_used_mb"],
+                    "memory_free_mb": gpu["memory_free_mb"],
+                    "gpu_utilization_pct": gpu["gpu_utilization_pct"],
+                    "available": gpu["gpu_utilization_pct"] < 10 and gpu["memory_used_mb"] < gpu["memory_total_mb"] * 0.1,
+                })
+            output.append({
+                "host": host["alias"],
+                "status": "ok",
+                "gpus": gpus,
+            })
+        print(json.dumps(output, indent=2))
         return
 
     # TUI mode — skip Flask entirely
