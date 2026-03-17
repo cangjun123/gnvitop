@@ -163,13 +163,6 @@ def main():
         run_tui(ssh_config_path=args.ssh_config, refresh_interval=args.tui_refresh)
         return
 
-    # Check SSH config exists
-    ssh_config = args.ssh_config or os.path.expanduser("~/.ssh/config")
-    if not os.path.exists(ssh_config):
-        print(f"Warning: SSH config not found at {ssh_config}")
-        print("gnvitop will start but no hosts will be queried.")
-        print("Create ~/.ssh/config or use --ssh-config to specify a path.\n")
-
     # Set custom SSH config path if provided
     if args.ssh_config:
         from . import server
