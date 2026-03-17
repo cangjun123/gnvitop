@@ -21,9 +21,8 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .header {
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
     margin-bottom: 28px;
-    position: relative;
   }
 
   .header h1 {
@@ -37,8 +36,6 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     display: flex;
     align-items: center;
     gap: 16px;
-    position: absolute;
-    right: 0;
   }
 
   .status-text {
@@ -61,17 +58,25 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     opacity: 0.8;
   }
 
+  .header-divider {
+    width: 1px;
+    height: 20px;
+    background: #334155;
+    flex-shrink: 0;
+  }
+
   .btn-refresh {
-    padding: 8px 20px;
+    padding: 6px 14px;
     border: 1px solid #334155;
     background: #1e293b;
     color: #e2e8f0;
     border-radius: 8px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 13px;
     transition: all 0.2s;
+    white-space: nowrap;
   }
-  .btn-refresh:hover { background: #334155; border-color: #475569; }
+  .btn-refresh:hover { background: #334155; border-color: #475569; color: #f1f5f9; }
   .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
   @keyframes refreshPulse {
     0%   { box-shadow: 0 0 0 0 rgba(96,165,250,0.5); }
@@ -80,11 +85,35 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   }
   .btn-refresh.refreshing { animation: refreshPulse 0.8s ease; }
 
+  body.notify-off .global-watch-btn,
+  body.notify-off .watch-btn { display: none; }
+
+  .global-watch-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 22px;
+    padding: 0 8px;
+    color: #475569;
+    transition: color 0.2s, transform 0.2s;
+    line-height: 1;
+  }
+  .global-watch-btn:hover { color: #94a3b8; transform: scale(1.1); }
+  .global-watch-btn.watching { color: #facc15; }
+
   /* Drag-and-drop */
   .host-card.dragging { opacity: 0.4; cursor: grabbing; }
   .host-card.drag-over { outline: 2px dashed #60a5fa; outline-offset: 2px; }
-  .host-header { cursor: grab; }
-  .host-header:active { cursor: grabbing; }
+  .drag-handle {
+    cursor: grab;
+    color: #475569;
+    font-size: 14px;
+    padding: 2px 4px;
+    user-select: none;
+    line-height: 1;
+  }
+  .drag-handle:hover { color: #94a3b8; }
+  .drag-handle:active { cursor: grabbing; }
 
   .summary-bar {
     display: flex;
@@ -290,17 +319,61 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .auto-refresh-toggle {
-    display: flex;
+  /* iOS-style toggle switch */
+  .toggle-switch {
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 7px;
+    cursor: pointer;
     font-size: 13px;
     color: #94a3b8;
-    cursor: pointer;
     user-select: none;
+    transition: color 0.2s;
   }
+  .toggle-switch:hover { color: #cbd5e1; }
+  .toggle-switch input { display: none; }
+  .toggle-knob {
+    width: 30px;
+    height: 17px;
+    background: #334155;
+    border-radius: 9px;
+    position: relative;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .toggle-knob::after {
+    content: '';
+    position: absolute;
+    width: 13px;
+    height: 13px;
+    background: #94a3b8;
+    border-radius: 50%;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.2s, background 0.2s;
+  }
+  .toggle-switch input:checked ~ .toggle-knob { background: #1d4ed8; }
+  .toggle-switch input:checked ~ .toggle-knob::after { transform: translateX(13px); background: #60a5fa; }
+  .toggle-switch input:checked ~ .toggle-label { color: #cbd5e1; }
 
-  .auto-refresh-toggle input { cursor: pointer; }
+  /* Universal tooltip */
+  #ui-tooltip {
+    position: fixed;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 12px;
+    color: #cbd5e1;
+    pointer-events: none;
+    z-index: 9999;
+    max-width: 260px;
+    line-height: 1.5;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+  #ui-tooltip.visible { opacity: 1; }
 
   .badge-local { background: #172554; color: #60a5fa; }
 
@@ -339,21 +412,19 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     border: 1px solid #334155;
     border-radius: 8px;
     overflow: hidden;
-    font-size: 12px;
   }
   .mode-toggle button {
-    padding: 5px 12px;
+    padding: 5px 11px;
     border: none;
     background: transparent;
     color: #64748b;
     cursor: pointer;
     transition: all 0.2s;
-    font-size: 12px;
+    font-size: 13px;
+    white-space: nowrap;
   }
-  .mode-toggle button.active {
-    background: #334155;
-    color: #e2e8f0;
-  }
+  .mode-toggle button:hover { color: #94a3b8; background: #1e293b; }
+  .mode-toggle button.active { background: #334155; color: #e2e8f0; }
 
   /* Initial load animation only */
   .host-card.first-render {
@@ -370,12 +441,13 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     border: 1px solid #334155;
     border-radius: 8px;
     color: #94a3b8;
-    font-size: 12px;
+    font-size: 13px;
     padding: 5px 8px;
     cursor: pointer;
     outline: none;
+    transition: border-color 0.2s, color 0.2s;
   }
-  .interval-select:hover { border-color: #475569; }
+  .interval-select:hover { border-color: #475569; color: #cbd5e1; }
 
   /* Compact mode */
   body.compact .summary-bar { display: none; }
@@ -386,8 +458,6 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 
   /* Collapse */
   .host-header {
-    cursor: pointer;
-    user-select: none;
     transition: background 0.15s;
   }
   .host-header-left {
@@ -395,6 +465,9 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     align-items: center;
     gap: 8px;
     min-width: 0;
+    cursor: pointer;
+    user-select: none;
+    flex: 1;
   }
   .host-header-right {
     display: flex;
@@ -408,9 +481,53 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     transition: transform 0.2s;
     display: inline-block;
   }
+  .host-body {
+    max-height: 2000px;
+    overflow: hidden;
+    transition: max-height 0.15s ease, opacity 0.1s ease;
+    opacity: 1;
+  }
   .host-card.collapsed .collapse-arrow { transform: rotate(-90deg); }
-  .host-card.collapsed .host-body { display: none; }
+  .host-card.collapsed .host-body { max-height: 0; opacity: 0; }
   .host-card.collapsed .host-header { border-bottom: none; }
+  .watch-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 15px;
+    padding: 2px 4px;
+    color: #475569;
+    transition: color 0.2s;
+    line-height: 1;
+    position: relative;
+  }
+  .watch-btn:hover { color: #94a3b8; }
+  .watch-btn.watching { color: #facc15; }
+  @keyframes watchPop {
+    0%   { transform: scale(1); }
+    35%  { transform: scale(1.5) rotate(-15deg); }
+    65%  { transform: scale(0.9) rotate(10deg); }
+    100% { transform: scale(1) rotate(0deg); }
+  }
+  .watch-btn.watch-pop, .global-watch-btn.watch-pop { animation: watchPop 0.4s ease; }
+  .watch-btn .watch-tooltip {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: #cbd5e1;
+    white-space: nowrap;
+    z-index: 100;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    min-width: 160px;
+  }
+  .watch-btn:hover .watch-tooltip { display: block; }
   .collapsed-info {
     font-size: 11px;
     color: #64748b;
@@ -463,15 +580,25 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   </h1>
   <div class="header-right">
     <span class="status-text" id="update-time"></span>
+    <div class="header-divider"></div>
     <div class="mode-toggle" id="mode-toggle">
-      <button onclick="setMode('compact')" id="mode-compact">Compact</button>
-      <button onclick="setMode('normal')" id="mode-normal">Expand</button>
+      <button onclick="setMode('compact')" id="mode-compact" data-tip="Compact view: smaller cards, hide host details">Compact</button>
+      <button onclick="setMode('normal')" id="mode-normal" data-tip="Expand view: full cards with all GPU details">Expand</button>
     </div>
-    <label class="auto-refresh-toggle">
-      <input type="checkbox" id="auto-refresh" checked>
-      Auto
+    <div class="header-divider"></div>
+    <label class="toggle-switch" data-tip="Enable GPU availability notifications. Use the 🔔 bell on each card to select which hosts to watch.">
+      <input type="checkbox" id="notify-toggle" onchange="setNotifyEnabled(this.checked)">
+      <span class="toggle-knob"></span>
+      <span class="toggle-label">&#128276; Notify</span>
     </label>
-    <select class="interval-select" id="interval-select" onchange="setInterval_(this.value)">
+    <button class="global-watch-btn" id="global-watch-btn" onclick="toggleGlobalWatch()" data-tip="Watch all hosts — notify when any GPU becomes free">&#128277;</button>
+    <div class="header-divider"></div>
+    <label class="toggle-switch" data-tip="Auto-refresh: automatically fetch latest GPU data at the selected interval">
+      <input type="checkbox" id="auto-refresh" checked>
+      <span class="toggle-knob"></span>
+      <span class="toggle-label">Auto Refresh</span>
+    </label>
+    <select class="interval-select" id="interval-select" onchange="setInterval_(this.value)" data-tip="Auto-refresh interval">
       <option value="5">5s</option>
       <option value="10">10s</option>
       <option value="30" selected>30s</option>
@@ -487,12 +614,40 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   </div>
 </div>
 
+<div id="ui-tooltip"></div>
 <div class="summary-bar" id="summary-bar"></div>
 <div id="content">
   <div class="loading"><div class="spinner"></div><br>Connecting to hosts...</div>
 </div>
 
 <script>
+// Universal tooltip for [data-tip] elements
+(function() {
+  const tip = document.createElement('div');
+  tip.id = 'ui-tooltip';
+  document.body.appendChild(tip);
+  let hideTimer;
+  document.addEventListener('mouseover', e => {
+    const el = e.target.closest('[data-tip]');
+    if (!el) return;
+    clearTimeout(hideTimer);
+    tip.textContent = el.dataset.tip;
+    tip.classList.add('visible');
+  });
+  document.addEventListener('mousemove', e => {
+    if (!tip.classList.contains('visible')) return;
+    const x = e.clientX + 14, y = e.clientY + 14;
+    const r = tip.getBoundingClientRect();
+    tip.style.left = (x + r.width > window.innerWidth ? x - r.width - 20 : x) + 'px';
+    tip.style.top  = (y + r.height > window.innerHeight ? y - r.height - 20 : y) + 'px';
+  });
+  document.addEventListener('mouseout', e => {
+    const el = e.target.closest('[data-tip]');
+    if (!el) return;
+    hideTimer = setTimeout(() => tip.classList.remove('visible'), 100);
+  });
+})();
+
 let autoRefreshTimer = null;
 let currentMode = 'normal';
 let lastData = null;
@@ -514,19 +669,23 @@ function _applyHostOrder(list) {
 function _setupDrag(grid) {
   let dragSrc = null;
   grid.querySelectorAll('.host-card').forEach(card => {
-    card.setAttribute('draggable', 'true');
-    card.addEventListener('dragstart', e => {
-      dragSrc = card;
-      card.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-    });
-    card.addEventListener('dragend', () => {
-      card.classList.remove('dragging');
-      grid.querySelectorAll('.host-card').forEach(c => c.classList.remove('drag-over'));
-      // Save new order
-      hostOrder = [...grid.querySelectorAll('.host-card')].map(c => c.dataset.alias);
-      localStorage.setItem('gnvitop-order', JSON.stringify(hostOrder));
-    });
+    const handle = card.querySelector('.drag-handle');
+    if (handle) {
+      handle.setAttribute('draggable', 'true');
+      handle.addEventListener('dragstart', e => {
+        dragSrc = card;
+        card.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setDragImage(card, 0, 0);
+        e.stopPropagation();
+      });
+      handle.addEventListener('dragend', () => {
+        card.classList.remove('dragging');
+        grid.querySelectorAll('.host-card').forEach(c => c.classList.remove('drag-over'));
+        hostOrder = [...grid.querySelectorAll('.host-card')].map(c => c.dataset.alias);
+        localStorage.setItem('gnvitop-order', JSON.stringify(hostOrder));
+      });
+    }
     card.addEventListener('dragover', e => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
@@ -551,11 +710,135 @@ function _setupDrag(grid) {
   });
 }
 let collapsedHosts = new Set(JSON.parse(localStorage.getItem('gnvitop-collapsed') || '[]'));
+let watchedHosts = new Set(JSON.parse(localStorage.getItem('gnvitop-watched') || '[]'));
+let prevAvailability = {}; // "alias||gpuIndex" -> bool, tracks last known state
+let notifyEnabled = localStorage.getItem('gnvitop-notify') === 'true';
+
+function setNotifyEnabled(enabled) {
+  notifyEnabled = enabled;
+  localStorage.setItem('gnvitop-notify', enabled);
+  document.body.classList.toggle('notify-off', !enabled);
+  if (enabled && Notification.permission === 'default') Notification.requestPermission();
+}
+
+function toggleWatch(alias) {
+  if (watchedHosts.has(alias)) {
+    watchedHosts.delete(alias);
+  } else {
+    watchedHosts.add(alias);
+    if (Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }
+  localStorage.setItem('gnvitop-watched', JSON.stringify([...watchedHosts]));
+  let card = null;
+  document.querySelectorAll('.host-card').forEach(c => { if (c.dataset.alias === alias) card = c; });
+  if (card) {
+    const btn = card.querySelector('.watch-btn');
+    if (btn) {
+      const watching = watchedHosts.has(alias);
+      btn.classList.toggle('watching', watching);
+      btn.childNodes[0].textContent = watching ? '\uD83D\uDD14' : '\uD83D\uDD15';
+      // Update tooltip content to reflect new state
+      const tooltip = btn.querySelector('.watch-tooltip');
+      if (tooltip && lastData) {
+        const host = lastData.hosts.find(h => h.alias === alias);
+        if (host && host.status === 'ok') {
+          const free = host.gpus.filter(g => _gpuAvailable(g));
+          if (free.length > 0) {
+            const label = free.map(g => 'GPU ' + g.index + ' (' + Math.round(g.memory_free_mb/1024*10)/10 + 'GB free)').join('<br>');
+            tooltip.style.color = '#4ade80';
+            tooltip.innerHTML = free.length + ' GPU' + (free.length>1?'s':'') + ' available:<br>' + label + '<br><span style="color:#94a3b8">' + (watching ? 'Click to stop watching' : 'Click to watch') + '</span>';
+          } else {
+            tooltip.style.color = '';
+            tooltip.innerHTML = watching ? 'Watching \u2014 notify on free GPU<br><span style="color:#94a3b8">Click to stop</span>' : 'Watch for free GPUs';
+          }
+        }
+      }
+      btn.classList.remove('watch-pop');
+      void btn.offsetWidth;
+      btn.classList.add('watch-pop');
+    }
+  }
+}
+
+function _gpuAvailable(gpu) {
+  return gpu.gpu_utilization_pct < 10 && gpu.memory_used_mb < gpu.memory_total_mb * 0.1;
+}
+
+function checkWatchedNotifications(hosts) {
+  if (!notifyEnabled || Notification.permission !== 'granted') return;
+  hosts.forEach(host => {
+    if (!watchedHosts.has(host.alias) || host.status !== 'ok') return;
+    host.gpus.forEach(gpu => {
+      const key = host.alias + '||' + gpu.index;
+      const nowAvail = _gpuAvailable(gpu);
+      const wasAvail = prevAvailability[key];
+      if (nowAvail && wasAvail === false) {
+        new Notification('GPU Available — ' + host.alias, {
+          body: 'GPU ' + gpu.index + ' (' + gpu.name + ')  ' + Math.round(gpu.memory_free_mb / 1024 * 10) / 10 + ' GB free',
+          tag: 'gnvitop-' + host.alias + '-' + gpu.index,
+        });
+      }
+      prevAvailability[key] = nowAvail;
+    });
+  });
+}
 
 function toggleCollapse(alias) {
-  if (collapsedHosts.has(alias)) { collapsedHosts.delete(alias); } else { collapsedHosts.add(alias); }
-  localStorage.setItem('gnvitop-collapsed', JSON.stringify([...collapsedHosts]));
+  const collapsing = !collapsedHosts.has(alias);
+  if (collapsing) {
+    // Animate first, then re-render to move card to Folded section
+    let card = null;
+    document.querySelectorAll('.host-card').forEach(c => { if (c.dataset.alias === alias) card = c; });
+    if (card) card.classList.add('collapsed');
+    collapsedHosts.add(alias);
+    localStorage.setItem('gnvitop-collapsed', JSON.stringify([...collapsedHosts]));
+    setTimeout(() => { if (lastData) renderHosts(lastData.hosts); }, 150);
+  } else {
+    // Re-render first (card moves to expanded section), then animate open
+    collapsedHosts.delete(alias);
+    localStorage.setItem('gnvitop-collapsed', JSON.stringify([...collapsedHosts]));
+    if (lastData) renderHosts(lastData.hosts);
+    let card = null;
+    document.querySelectorAll('.host-card').forEach(c => { if (c.dataset.alias === alias) card = c; });
+    if (card) {
+      card.classList.add('collapsed');
+      getComputedStyle(card.querySelector('.host-body')).maxHeight; // force reflow
+      card.classList.remove('collapsed');
+    }
+  }
+}
+
+function toggleGlobalWatch() {
+  if (!lastData) return;
+  const aliases = lastData.hosts.map(h => h.alias);
+  const allWatched = aliases.every(a => watchedHosts.has(a));
+  if (allWatched) {
+    aliases.forEach(a => watchedHosts.delete(a));
+  } else {
+    aliases.forEach(a => watchedHosts.add(a));
+    if (Notification.permission === 'default') Notification.requestPermission();
+  }
+  localStorage.setItem('gnvitop-watched', JSON.stringify([...watchedHosts]));
+  _updateGlobalWatchBtn();
+  const btn = document.getElementById('global-watch-btn');
+  if (btn) {
+    btn.classList.remove('watch-pop');
+    void btn.offsetWidth;
+    btn.classList.add('watch-pop');
+  }
   if (lastData) renderHosts(lastData.hosts);
+}
+
+function _updateGlobalWatchBtn() {
+  const btn = document.getElementById('global-watch-btn');
+  if (!btn || !lastData) return;
+  const aliases = lastData.hosts.map(h => h.alias);
+  const allWatched = aliases.length > 0 && aliases.every(a => watchedHosts.has(a));
+  btn.classList.toggle('watching', allWatched);
+  btn.textContent = allWatched ? '\uD83D\uDD14' : '\uD83D\uDD15';
+  btn.title = allWatched ? 'Unwatch all hosts' : 'Watch all hosts for free GPUs';
 }
 
 function setInterval_(secs) {
@@ -766,7 +1049,8 @@ function renderHosts(hosts) {
     return `
       <div class="${cardClass}" data-alias="${alias}">
         <div class="host-header" onclick="toggleCollapse('${alias}')">
-          <div class="host-header-left">
+          <div class="host-header-left" draggable="false">
+            <span class="drag-handle" title="Drag to reorder" onclick="event.stopPropagation()">&#8942;&#8942;</span>
             <div>
               <div class="host-name">${host.alias}</div>
               <div class="host-info">${host.user}@${host.hostname}${host.port ? ':' + host.port : ''}</div>
@@ -774,6 +1058,16 @@ function renderHosts(hosts) {
             </div>
           </div>
           <div class="host-header-right">
+            <button class="watch-btn${watchedHosts.has(host.alias) ? ' watching' : ''}" draggable="false" onclick="event.stopPropagation(); toggleWatch('${alias}')">${watchedHosts.has(host.alias) ? '&#128276;' : '&#128277;'}${(() => {
+              if (host.status !== 'ok') return '<span class="watch-tooltip">Watch this host</span>';
+              const free = host.gpus.filter(g => _gpuAvailable(g));
+              const watching = watchedHosts.has(host.alias);
+              if (free.length > 0) {
+                const label = free.map(g => 'GPU ' + g.index + ' (' + Math.round(g.memory_free_mb/1024*10)/10 + 'GB free)').join('<br>');
+                return '<span class="watch-tooltip" style="color:#4ade80">' + free.length + ' GPU' + (free.length>1?'s':'') + ' available:<br>' + label + (watching ? '<br><span style="color:#94a3b8">Click to stop watching</span>' : '<br><span style="color:#94a3b8">Click to watch</span>') + '</span>';
+              }
+              return '<span class="watch-tooltip">' + (watching ? 'Watching — notify on free GPU<br><span style="color:#94a3b8">Click to stop</span>' : 'Watch for free GPUs') + '</span>';
+            })()}</button>
             <span class="status-badge ${badgeClass}">${badgeText}</span>
             <span class="collapse-arrow">&#9660;</span>
           </div>
@@ -795,6 +1089,7 @@ function renderHosts(hosts) {
 
   container.innerHTML = html;
   container.querySelectorAll('.host-grid').forEach(g => _setupDrag(g));
+  _updateGlobalWatchBtn();
 }
 
 async function fetchData(force) {
@@ -876,6 +1171,12 @@ function updateTime(ts) {
 }
 
 async function init() {
+  // Restore notify toggle state
+  const notifyChk = document.getElementById('notify-toggle');
+  if (notifyChk) {
+    notifyChk.checked = notifyEnabled;
+    document.body.classList.toggle('notify-off', !notifyEnabled);
+  }
   // Try fast-path: if cache is warm, show data instantly then start SSE for next full refresh
   try {
     const cached = await fetchData(false);
@@ -902,6 +1203,7 @@ function setupAutoRefresh() {
       renderSummary(data.hosts);
       renderHosts(data.hosts);
       updateTime(data.updated_at);
+      checkWatchedNotifications(data.hosts);
     }).catch(() => {});
   }
   if (checkbox.checked) {
