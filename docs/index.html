@@ -240,7 +240,6 @@
   </div>
 </div>
 
-<!-- JS will be added in later tasks -->
 
 <script>
 // Particles.js config
@@ -313,11 +312,12 @@ function updateGpuStats() {
       // Random walk ±15%
       let u = state[si].gpus[gi].util + (Math.random() * 30 - 15);
       u = Math.max(5, Math.min(98, u));
-      state[si].gpus[gi].util = Math.round(u);
+      u = Math.round(u);
+      state[si].gpus[gi].util = u;
       const bar = document.getElementById(`bar-${si}-${gi}`);
       const util = document.getElementById(`util-${si}-${gi}`);
       if (bar) bar.style.width = u + '%';
-      if (util) util.textContent = Math.round(u) + '%';
+      if (util) util.textContent = u + '%';
     });
   });
 }
