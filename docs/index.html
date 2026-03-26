@@ -215,6 +215,39 @@
       margin-top: 3px;
       font-family: var(--mono);
     }
+
+    /* ── Features ──────────────────────────────────── */
+    #features { border-top: 1px solid var(--border); }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+    }
+    .feature-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    .feature-card:hover {
+      border-color: var(--green);
+      box-shadow: 0 0 20px rgba(0,255,136,0.08);
+    }
+    .feature-icon {
+      font-size: 1.8rem;
+      margin-bottom: 16px;
+    }
+    .feature-card h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .feature-card p {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
   </style>
 </head>
 <body>
@@ -240,6 +273,43 @@
   </div>
 </div>
 
+<!-- ═══════════════════════════ FEATURES ══════ -->
+<section id="features">
+  <p class="section-label">Why gnvitop</p>
+  <h2 class="section-title">Everything you need to<br>monitor your GPU cluster</h2>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">🔌</div>
+      <h3>SSH Auto-Discovery</h3>
+      <p>Reads your <code>~/.ssh/config</code> automatically. No extra configuration — if SSH works, gnvitop works.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">⚡</div>
+      <h3>Real-time Refresh</h3>
+      <p>Dashboard auto-refreshes every 30 seconds with live GPU utilization, memory, and process data.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">👤</div>
+      <h3>Current User Highlight</h3>
+      <p>Your processes are highlighted so you instantly see what's yours on a shared cluster.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🖥️</div>
+      <h3>TUI Mode</h3>
+      <p>Prefer the terminal? Run <code>gnvitop --tui</code> for a full-featured terminal UI — no browser needed.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🤖</div>
+      <h3>Agent JSON Output</h3>
+      <p>Use <code>gnvitop --agent</code> to get structured JSON of GPU availability — perfect for automation scripts.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔴</div>
+      <h3>Offline Detection</h3>
+      <p>Servers that can't be reached are clearly shown as offline — no silent failures, no confusion.</p>
+    </div>
+  </div>
+</section>
 
 <script>
 // Particles.js config
@@ -324,6 +394,17 @@ function updateGpuStats() {
 
 renderGpuWidget();
 setInterval(updateGpuStats, 2000);
+
+// ScrollReveal
+ScrollReveal().reveal('.feature-card', {
+  delay: 100,
+  distance: '30px',
+  origin: 'bottom',
+  interval: 80,
+  duration: 600,
+  easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
+  reset: false
+});
 </script>
 </body>
 </html>
