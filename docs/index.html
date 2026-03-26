@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>gnvitop — Global GPU Monitor</title>
+  <meta name="description" content="Web-based GPU monitoring dashboard for all your remote servers via SSH." />
+
+  <!-- CDN Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/typed.js@2.1.0/dist/typed.umd.js"></script>
+  <script src="https://unpkg.com/scrollreveal"></script>
+
+  <style>
+    /* ── Variables ─────────────────────────────────── */
+    :root {
+      --bg:      #0a0a0f;
+      --bg2:     #111118;
+      --green:   #00ff88;
+      --purple:  #7c3aed;
+      --text:    #e2e8f0;
+      --muted:   #94a3b8;
+      --border:  #1e1e2e;
+      --radius:  12px;
+      --mono:    'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+
+    /* ── Reset ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    a { color: var(--green); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Section layout helper ─────────────────────── */
+    section {
+      padding: 96px 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .section-label {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--green);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    h2.section-title {
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 700;
+      margin-bottom: 48px;
+    }
+
+    /* ── Hero ──────────────────────────────────────── */
+    #hero {
+      position: relative;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 0 24px;
+      overflow: hidden;
+      max-width: 100%;
+    }
+    #particles-js {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+    }
+    .hero-content {
+      position: relative;
+      z-index: 1;
+    }
+    .hero-logo {
+      width: 72px;
+      height: 72px;
+      margin-bottom: 24px;
+      filter: drop-shadow(0 0 16px rgba(0,255,136,0.4));
+    }
+    .hero-title {
+      font-size: clamp(2.5rem, 7vw, 5rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+      min-height: 1.2em;
+    }
+    .typed-cursor { color: var(--green); }
+    .hero-subtitle {
+      font-size: clamp(1rem, 2.5vw, 1.3rem);
+      color: var(--muted);
+      margin-top: 16px;
+      max-width: 600px;
+      opacity: 0;
+      transition: opacity 0.8s ease 0.5s;
+    }
+    .hero-subtitle.visible { opacity: 1; }
+    .hero-cta {
+      display: flex;
+      gap: 16px;
+      margin-top: 40px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .btn {
+      padding: 14px 32px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: var(--green);
+      color: #000;
+      box-shadow: 0 0 24px rgba(0,255,136,0.3);
+    }
+    .btn-primary:hover {
+      box-shadow: 0 0 40px rgba(0,255,136,0.6);
+      transform: translateY(-2px);
+      text-decoration: none;
+    }
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover {
+      border-color: var(--green);
+      color: var(--green);
+      text-decoration: none;
+      transform: translateY(-2px);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════ HERO ══════ -->
+<div id="hero">
+  <div id="particles-js"></div>
+  <div class="hero-content">
+    <img src="assets/logo.svg" alt="gnvitop logo" class="hero-logo" />
+    <h1 class="hero-title"><span id="typed-title"></span></h1>
+    <p class="hero-subtitle" id="hero-subtitle">
+      Web-based GPU monitoring dashboard for all your remote servers
+    </p>
+    <div class="hero-cta">
+      <a href="https://github.com/Linwei94/gnvitop" class="btn btn-primary" target="_blank">View on GitHub</a>
+      <a href="https://pypi.org/project/gnvitop/" class="btn btn-secondary" target="_blank">Install via pip</a>
+    </div>
+  </div>
+</div>
+
+<!-- JS will be added in later tasks -->
+
+<script>
+// Particles.js config
+particlesJS('particles-js', {
+  particles: {
+    number: { value: 60, density: { enable: true, value_area: 800 } },
+    color: { value: '#00ff88' },
+    shape: { type: 'circle' },
+    opacity: { value: 0.35, random: true },
+    size: { value: 2, random: true },
+    line_linked: { enable: true, distance: 140, color: '#00ff88', opacity: 0.15, width: 1 },
+    move: { enable: true, speed: 1.2, direction: 'none', random: true, out_mode: 'out' }
+  },
+  interactivity: {
+    detect_on: 'canvas',
+    events: { onhover: { enable: true, mode: 'grab' }, onclick: { enable: true, mode: 'push' } },
+    modes: { grab: { distance: 160, line_linked: { opacity: 0.5 } }, push: { particles_nb: 3 } }
+  }
+});
+
+// Typed.js
+const typed = new Typed('#typed-title', {
+  strings: ['gnvitop'],
+  typeSpeed: 80,
+  startDelay: 400,
+  showCursor: true,
+  cursorChar: '█',
+  onComplete: () => {
+    document.getElementById('hero-subtitle').classList.add('visible');
+  }
+});
+</script>
+</body>
+</html>
