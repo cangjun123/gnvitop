@@ -408,9 +408,86 @@
     .cmd { color: var(--text); }
     .comment { color: var(--muted); }
     .flag { color: #7dd3fc; }
+
+    /* ── Footer ────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 48px 24px;
+      text-align: center;
+    }
+    .footer-badges {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+    .footer-meta {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .footer-meta a { color: var(--muted); }
+    .footer-meta a:hover { color: var(--green); }
+
+    /* ── Navbar ────────────────────────────────────── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      padding: 14px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(10,10,15,0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid transparent;
+      transition: border-color 0.3s;
+    }
+    nav.scrolled { border-bottom-color: var(--border); }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: var(--text);
+    }
+    .nav-brand img { width: 28px; height: 28px; }
+    .nav-links {
+      display: flex;
+      gap: 24px;
+      list-style: none;
+    }
+    .nav-links a {
+      color: var(--muted);
+      font-size: 0.9rem;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--green); text-decoration: none; }
+
+    /* ── Scrollbar ─────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--green); }
   </style>
 </head>
 <body>
+
+<nav id="navbar">
+  <a href="#" class="nav-brand" style="text-decoration:none">
+    <img src="assets/logo.svg" alt="gnvitop" />
+    gnvitop
+  </a>
+  <ul class="nav-links">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#how-it-works">How it works</a></li>
+    <li><a href="#screenshots">Screenshots</a></li>
+    <li><a href="#installation">Install</a></li>
+    <li><a href="https://github.com/Linwei94/gnvitop" target="_blank">GitHub</a></li>
+  </ul>
+</nav>
 
 <!-- ═══════════════════════════════ HERO ══════ -->
 <div id="hero">
@@ -572,6 +649,29 @@
   </div>
 </section>
 
+<!-- ════════════════════════════ FOOTER ══════════ -->
+<footer>
+  <div class="footer-badges">
+    <a href="https://pypi.org/project/gnvitop/" target="_blank">
+      <img src="https://img.shields.io/pypi/v/gnvitop?color=00ff88&labelColor=111118&style=flat-square" alt="PyPI version" />
+    </a>
+    <a href="https://pypi.org/project/gnvitop/" target="_blank">
+      <img src="https://img.shields.io/pypi/pyversions/gnvitop?labelColor=111118&style=flat-square" alt="Python versions" />
+    </a>
+    <a href="https://github.com/Linwei94/gnvitop/blob/main/LICENSE" target="_blank">
+      <img src="https://img.shields.io/github/license/Linwei94/gnvitop?labelColor=111118&style=flat-square" alt="License" />
+    </a>
+    <a href="https://github.com/Linwei94/gnvitop/stargazers" target="_blank">
+      <img src="https://img.shields.io/github/stars/Linwei94/gnvitop?style=flat-square&labelColor=111118&color=7c3aed" alt="GitHub stars" />
+    </a>
+  </div>
+  <p class="footer-meta">
+    MIT License &nbsp;·&nbsp;
+    <a href="https://github.com/Linwei94/gnvitop" target="_blank">GitHub</a> &nbsp;·&nbsp;
+    <a href="https://pypi.org/project/gnvitop/" target="_blank">PyPI</a>
+  </p>
+</footer>
+
 <script>
 // Particles.js config
 particlesJS('particles-js', {
@@ -719,6 +819,11 @@ function copyCode(blockId, text) {
 
   observer.observe(diagram);
 })();
+
+// Navbar border on scroll
+window.addEventListener('scroll', () => {
+  document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 10);
+});
 </script>
 </body>
 </html>
