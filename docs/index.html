@@ -248,6 +248,81 @@
       font-size: 0.9rem;
       line-height: 1.6;
     }
+
+    /* ── How It Works ──────────────────────────────── */
+    #how-it-works { border-top: 1px solid var(--border); }
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 0;
+      margin-top: 48px;
+    }
+    .flow-node {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 28px;
+      text-align: center;
+      min-width: 140px;
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity 0.5s ease, transform 0.5s ease, border-color 0.3s;
+    }
+    .flow-node.active {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .flow-node:hover { border-color: var(--green); }
+    .flow-node-icon { font-size: 2rem; margin-bottom: 8px; }
+    .flow-node-label {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--green);
+      font-weight: 600;
+    }
+    .flow-node-desc {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+    .flow-arrow {
+      width: 48px;
+      height: 2px;
+      background: var(--border);
+      position: relative;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .flow-arrow::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, var(--green), var(--purple));
+      width: 0%;
+      transition: width 0.6s ease;
+    }
+    .flow-arrow.active::after { width: 100%; }
+    .flow-arrow-head {
+      position: absolute;
+      right: -1px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 0; height: 0;
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+      border-left: 8px solid var(--purple);
+      opacity: 0;
+      transition: opacity 0.3s ease 0.5s;
+    }
+    .flow-arrow.active .flow-arrow-head { opacity: 1; }
+    @media (max-width: 640px) {
+      .flow-diagram { flex-direction: column; }
+      .flow-arrow { width: 2px; height: 32px; }
+      .flow-arrow::after { width: 100%; height: 0%; transition: height 0.6s ease; }
+      .flow-arrow.active::after { height: 100%; }
+    }
   </style>
 </head>
 <body>
@@ -307,6 +382,37 @@
       <div class="feature-icon">🔴</div>
       <h3>Offline Detection</h3>
       <p>Servers that can't be reached are clearly shown as offline — no silent failures, no confusion.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ HOW IT WORKS ══════ -->
+<section id="how-it-works">
+  <p class="section-label">Under the hood</p>
+  <h2 class="section-title">How it works</h2>
+  <div class="flow-diagram" id="flow-diagram">
+    <div class="flow-node" data-step="0">
+      <div class="flow-node-icon">⚙️</div>
+      <div class="flow-node-label">gnvitop</div>
+      <div class="flow-node-desc">Python process<br>on your machine</div>
+    </div>
+    <div class="flow-arrow" data-step="1"><div class="flow-arrow-head"></div></div>
+    <div class="flow-node" data-step="2">
+      <div class="flow-node-icon">🔐</div>
+      <div class="flow-node-label">SSH</div>
+      <div class="flow-node-desc">Reads ~/.ssh/config<br>connects to each host</div>
+    </div>
+    <div class="flow-arrow" data-step="3"><div class="flow-arrow-head"></div></div>
+    <div class="flow-node" data-step="4">
+      <div class="flow-node-icon">🖥️</div>
+      <div class="flow-node-label">nvidia-smi</div>
+      <div class="flow-node-desc">Runs remotely<br>collects GPU stats</div>
+    </div>
+    <div class="flow-arrow" data-step="5"><div class="flow-arrow-head"></div></div>
+    <div class="flow-node" data-step="6">
+      <div class="flow-node-icon">🌐</div>
+      <div class="flow-node-label">Browser</div>
+      <div class="flow-node-desc">Live dashboard<br>auto-refreshes</div>
     </div>
   </div>
 </section>
@@ -405,6 +511,26 @@ ScrollReveal().reveal('.feature-card', {
   easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
   reset: false
 });
+
+// Flow diagram sequential animation on scroll
+(function() {
+  const diagram = document.getElementById('flow-diagram');
+  if (!diagram) return;
+  const nodes = diagram.querySelectorAll('[data-step]');
+  let animated = false;
+
+  const observer = new IntersectionObserver(entries => {
+    if (entries[0].isIntersecting && !animated) {
+      animated = true;
+      nodes.forEach(el => {
+        const step = parseInt(el.dataset.step);
+        setTimeout(() => el.classList.add('active'), step * 250);
+      });
+    }
+  }, { threshold: 0.4 });
+
+  observer.observe(diagram);
+})();
 </script>
 </body>
 </html>
