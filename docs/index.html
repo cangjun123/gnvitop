@@ -140,6 +140,81 @@
       text-decoration: none;
       transform: translateY(-2px);
     }
+
+    /* ── GPU Widget ────────────────────────────────── */
+    .gpu-widget {
+      margin-top: 56px;
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .gpu-server-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      min-width: 220px;
+      text-align: left;
+      transition: border-color 0.3s;
+    }
+    .gpu-server-card:hover { border-color: var(--green); }
+    .gpu-server-name {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      color: var(--green);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .gpu-server-name::before {
+      content: '';
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .gpu-row {
+      margin-bottom: 10px;
+    }
+    .gpu-row-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 4px;
+      font-family: var(--mono);
+    }
+    .gpu-row-header .gpu-util {
+      color: var(--text);
+      font-weight: 600;
+    }
+    .gpu-bar-track {
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .gpu-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--green), var(--purple));
+      transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 0 8px rgba(0,255,136,0.4);
+    }
+    .gpu-mem {
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-top: 3px;
+      font-family: var(--mono);
+    }
   </style>
 </head>
 <body>
@@ -156,6 +231,11 @@
     <div class="hero-cta">
       <a href="https://github.com/Linwei94/gnvitop" class="btn btn-primary" target="_blank">View on GitHub</a>
       <a href="https://pypi.org/project/gnvitop/" class="btn btn-secondary" target="_blank">Install via pip</a>
+    </div>
+
+    <!-- Simulated GPU Monitor Widget -->
+    <div class="gpu-widget" id="gpu-widget">
+      <!-- Cards injected by JS -->
     </div>
   </div>
 </div>
@@ -192,6 +272,58 @@ const typed = new Typed('#typed-title', {
     document.getElementById('hero-subtitle').classList.add('visible');
   }
 });
+
+// Simulated GPU servers
+const servers = [
+  { name: 'server-a', gpus: [{ label: 'A100 #0', mem: 40 }, { label: 'A100 #1', mem: 80 }] },
+  { name: 'server-b', gpus: [{ label: 'RTX 4090 #0', mem: 24 }, { label: 'RTX 4090 #1', mem: 24 }] },
+  { name: 'server-c', gpus: [{ label: 'V100 #0', mem: 16 }] },
+];
+
+// State: current utilization per GPU
+const state = servers.map(s => ({
+  ...s,
+  gpus: s.gpus.map(g => ({ ...g, util: Math.floor(Math.random() * 80) + 10 }))
+}));
+
+function renderGpuWidget() {
+  const container = document.getElementById('gpu-widget');
+  container.innerHTML = state.map((server, si) => `
+    <div class="gpu-server-card">
+      <div class="gpu-server-name">${server.name}</div>
+      ${server.gpus.map((gpu, gi) => `
+        <div class="gpu-row">
+          <div class="gpu-row-header">
+            <span>${gpu.label}</span>
+            <span class="gpu-util" id="util-${si}-${gi}">${state[si].gpus[gi].util}%</span>
+          </div>
+          <div class="gpu-bar-track">
+            <div class="gpu-bar-fill" id="bar-${si}-${gi}" style="width:${state[si].gpus[gi].util}%"></div>
+          </div>
+          <div class="gpu-mem">${gpu.mem}GB VRAM</div>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+}
+
+function updateGpuStats() {
+  state.forEach((server, si) => {
+    server.gpus.forEach((gpu, gi) => {
+      // Random walk ±15%
+      let u = state[si].gpus[gi].util + (Math.random() * 30 - 15);
+      u = Math.max(5, Math.min(98, u));
+      state[si].gpus[gi].util = Math.round(u);
+      const bar = document.getElementById(`bar-${si}-${gi}`);
+      const util = document.getElementById(`util-${si}-${gi}`);
+      if (bar) bar.style.width = u + '%';
+      if (util) util.textContent = Math.round(u) + '%';
+    });
+  });
+}
+
+renderGpuWidget();
+setInterval(updateGpuStats, 2000);
 </script>
 </body>
 </html>
