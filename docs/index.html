@@ -358,6 +358,56 @@
       width: 100%;
       display: block;
     }
+
+    /* ── Installation ──────────────────────────────── */
+    #installation { border-top: 1px solid var(--border); }
+    .install-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+    }
+    @media (max-width: 640px) { .install-grid { grid-template-columns: 1fr; } }
+    .code-block {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .code-block-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 16px;
+      background: #0d0d1a;
+      border-bottom: 1px solid var(--border);
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .copy-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 4px;
+      padding: 3px 10px;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .copy-btn:hover { border-color: var(--green); color: var(--green); }
+    .copy-btn.copied { border-color: var(--green); color: var(--green); }
+    .code-block pre {
+      padding: 20px;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      line-height: 1.8;
+    }
+    .prompt { color: var(--green); user-select: none; }
+    .cmd { color: var(--text); }
+    .comment { color: var(--muted); }
+    .flag { color: #7dd3fc; }
   </style>
 </head>
 <body>
@@ -473,6 +523,55 @@
   </div>
 </section>
 
+<!-- ═══════════════════════════ INSTALLATION ══════ -->
+<section id="installation">
+  <p class="section-label">Get started</p>
+  <h2 class="section-title">Up and running<br>in 30 seconds</h2>
+  <div class="install-grid">
+
+    <div class="code-block" id="cb-install">
+      <div class="code-block-header">
+        <span>Install</span>
+        <button class="copy-btn" onclick="copyCode('cb-install', 'pip install gnvitop')">Copy</button>
+      </div>
+      <pre><span class="prompt">$ </span><span class="cmd">pip install gnvitop</span></pre>
+    </div>
+
+    <div class="code-block" id="cb-run">
+      <div class="code-block-header">
+        <span>Run</span>
+        <button class="copy-btn" onclick="copyCode('cb-run', 'gnvitop')">Copy</button>
+      </div>
+      <pre><span class="prompt">$ </span><span class="cmd">gnvitop</span>
+<span class="comment"># Opens dashboard in your browser</span></pre>
+    </div>
+
+    <div class="code-block" id="cb-flags">
+      <div class="code-block-header">
+        <span>Common flags</span>
+        <button class="copy-btn" onclick="copyCode('cb-flags', 'gnvitop -p 8080\ngnvitop --host 0.0.0.0\ngnvitop --tui\ngnvitop --agent')">Copy</button>
+      </div>
+      <pre><span class="prompt">$ </span><span class="cmd">gnvitop <span class="flag">-p 8080</span></span>              <span class="comment"># custom port</span>
+<span class="prompt">$ </span><span class="cmd">gnvitop <span class="flag">--host 0.0.0.0</span></span>       <span class="comment"># expose to LAN</span>
+<span class="prompt">$ </span><span class="cmd">gnvitop <span class="flag">--tui</span></span>               <span class="comment"># terminal UI</span>
+<span class="prompt">$ </span><span class="cmd">gnvitop <span class="flag">--agent</span></span>             <span class="comment"># JSON output</span></pre>
+    </div>
+
+    <div class="code-block" id="cb-agent">
+      <div class="code-block-header">
+        <span>Agent mode output</span>
+        <button class="copy-btn" onclick="copyCode('cb-agent', 'gnvitop --agent')">Copy</button>
+      </div>
+      <pre><span class="prompt">$ </span><span class="cmd">gnvitop <span class="flag">--agent</span></span>
+<span class="comment">[{"host":"server-a","gpu":0,
+  "available":true,"util":12},
+ {"host":"server-b","gpu":1,
+  "available":false,"util":95}]</span></pre>
+    </div>
+
+  </div>
+</section>
+
 <script>
 // Particles.js config
 particlesJS('particles-js', {
@@ -576,6 +675,27 @@ ScrollReveal().reveal('.terminal-window', {
   easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
   reset: false
 });
+
+ScrollReveal().reveal('.code-block', {
+  delay: 80,
+  distance: '20px',
+  origin: 'bottom',
+  interval: 100,
+  duration: 500,
+  reset: false
+});
+
+function copyCode(blockId, text) {
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector(`#${blockId} .copy-btn`);
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = 'Copy';
+      btn.classList.remove('copied');
+    }, 2000);
+  });
+}
 
 // Flow diagram sequential animation on scroll
 (function() {
