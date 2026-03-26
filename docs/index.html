@@ -686,14 +686,17 @@ ScrollReveal().reveal('.code-block', {
 });
 
 function copyCode(blockId, text) {
+  const btn = document.querySelector(`#${blockId} .copy-btn`);
   navigator.clipboard.writeText(text).then(() => {
-    const btn = document.querySelector(`#${blockId} .copy-btn`);
     btn.textContent = 'Copied!';
     btn.classList.add('copied');
     setTimeout(() => {
       btn.textContent = 'Copy';
       btn.classList.remove('copied');
     }, 2000);
+  }).catch(() => {
+    btn.textContent = 'Failed!';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
   });
 }
 
