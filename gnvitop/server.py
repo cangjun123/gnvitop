@@ -6,6 +6,7 @@ import json
 import os
 import queue
 import re
+import shlex
 import subprocess
 import time
 import threading
@@ -20,10 +21,9 @@ from .dashboard import DASHBOARD_HTML
 app = Flask(__name__)
 
 SSH_CONFIG_PATH = os.path.expanduser("~/.ssh/config")
-SSH_TIMEOUT = 8
+SSH_TIMEOUT = 45
 
-# Single combined command: GPU stats + separator + per-process info
-# Splitting on ---SEP--- lets us parse both in one SSH round trip
+# ── nvidia-smi queries ────────────────────────────────────────────────────────
 _GPU_QUERY = (
     "nvidia-smi --query-gpu=index,name,memory.total,memory.used,memory.free,"
     "utilization.gpu,temperature.gpu --format=csv,noheader,nounits 2>/dev/null"
@@ -38,7 +38,39 @@ _PROC_QUERY = (
     r' printf "%s,%s,%s,%s,%s\n" "$pid" "$gpu" "$mem" "$user" "$comm";'
     r" fi; done"
 )
-COMBINED_CMD = f"{_GPU_QUERY}; echo '---SEP---'; {_PROC_QUERY}"
+
+# ── TPU queries (Google Cloud TPU) ───────────────────────────────────────────
+_TPU_CHIP_QUERY = "ls /dev/accel* 2>/dev/null | wc -l"
+_TPU_PROC_QUERY = (
+    "ps -eo pid,user,comm 2>/dev/null"
+    " | awk 'NR>1 && /python/ && !/awk/ {print $1\",0,0,\"$2\",\"$3}'"
+    " | head -10"
+)
+
+# ── mx-smi queries (沐曦 MetaX GPUs) ─────────────────────────────────────────
+_MX_PROC_QUERY = (
+    r"mx-smi --show-all-process 2>/dev/null"
+    r" | grep -E '^\|[[:space:]]+[0-9]'"
+    r" | sed 's/|//g'"
+    r" | awk '{print $1, $2, $NF}'"
+    r" | while read gpu_idx pid mem; do"
+    r' if [ -n "$pid" ]; then'
+    r" user=$(ps -o user= -p $pid 2>/dev/null | tr -d ' ');"
+    r' printf "%s,%s,%s,%s\n" "$gpu_idx" "$pid" "$mem" "$user";'
+    r" fi; done"
+)
+
+# ── Auto-detect: try nvidia-smi first, fall back to mx-smi ───────────────────
+# Output begins with "NVIDIA\n" or "MX\n" so the parser knows which format follows
+COMBINED_CMD = (
+    "if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then "
+    "echo NVIDIA; " + _GPU_QUERY + "; echo '---SEP---'; " + _PROC_QUERY + "; "
+    "elif command -v mx-smi >/dev/null 2>&1; then "
+    "echo MX; mx-smi 2>/dev/null; echo '---SEP---'; " + _MX_PROC_QUERY + "; "
+    "elif ls /dev/accel0 >/dev/null 2>&1; then "
+    "echo TPU; " + _TPU_CHIP_QUERY + "; echo '---SEP---'; " + _TPU_PROC_QUERY + "; "
+    "fi"
+)
 
 CURRENT_USER = getpass.getuser()
 
@@ -88,6 +120,7 @@ def parse_ssh_config(path):
                     "port": 22,
                     "identity_file": None,
                     "proxy_jump": None,
+                    "proxy_command": None,
                 }
                 hosts.append(current)
             elif current is not None:
@@ -102,17 +135,34 @@ def parse_ssh_config(path):
                 elif key.lower() == "proxyjump":
                     # Take only the first jump host (chained jumps not supported)
                     current["proxy_jump"] = value.split(",")[0].strip()
+                elif key.lower() == "proxycommand":
+                    current["proxy_command"] = value
 
     return hosts
 
 
 def _parse_combined_output(output):
-    """Split combined command output into GPU lines and process lines."""
+    """Split combined command output into (gpu_part, proc_part, vendor).
+
+    Output may begin with 'NVIDIA', 'MX', or 'TPU' to indicate accelerator vendor.
+    Returns vendor as one of: 'nvidia', 'mx', 'tpu'.
+    """
+    vendor = "nvidia"
+    lines = output.split("\n")
+    if lines and lines[0].strip() == "MX":
+        vendor = "mx"
+        output = "\n".join(lines[1:])
+    elif lines and lines[0].strip() == "NVIDIA":
+        output = "\n".join(lines[1:])
+    elif lines and lines[0].strip() == "TPU":
+        vendor = "tpu"
+        output = "\n".join(lines[1:])
+
     if "---SEP---" in output:
         gpu_part, proc_part = output.split("---SEP---", 1)
     else:
         gpu_part, proc_part = output, ""
-    return gpu_part.strip(), proc_part.strip()
+    return gpu_part.strip(), proc_part.strip(), vendor
 
 
 def _build_gpus(gpu_part):
@@ -139,6 +189,128 @@ def _build_gpus(gpu_part):
                 "processes": [],
             })
     return gpus
+
+
+def _build_mx_gpus(output):
+    """Parse default mx-smi table output into GPU dicts.
+
+    Each GPU occupies two adjacent table rows, e.g.:
+      | 0       MetaX C500  Off | 0000:0e:00.0 | 0%  Native |
+      | 36C  56W / 350W  P0     | 858/65536 MiB | Available  |
+    """
+    import re
+    gpus = []
+    lines = output.split("\n")
+    # Row 1: index, name, utilisation
+    row1_re = re.compile(
+        r"\|\s*(\d+)\s+([\w ]+?)\s+(?:Off|On)\s*\|[^|]+\|\s*(\d+)%"
+    )
+    # Row 2: temperature, mem_used / mem_total MiB
+    row2_re = re.compile(
+        r"\|\s*(\d+(?:\.\d+)?)C\s+[^|]+\|\s*(\d+)/(\d+)\s+MiB"
+    )
+    i = 0
+    while i < len(lines):
+        m1 = row1_re.search(lines[i])
+        if m1 and i + 1 < len(lines):
+            m2 = row2_re.search(lines[i + 1])
+            if m2:
+                mem_used = float(m2.group(2))
+                mem_total = float(m2.group(3))
+                gpus.append({
+                    "index": int(m1.group(1)),
+                    "name": m1.group(2).strip(),
+                    "memory_total_mb": mem_total,
+                    "memory_used_mb": mem_used,
+                    "memory_free_mb": mem_total - mem_used,
+                    "memory_usage_pct": round(mem_used / mem_total * 100, 1) if mem_total > 0 else 0,
+                    "gpu_utilization_pct": float(m1.group(3)),
+                    "temperature_c": float(m2.group(1)),
+                    "processes": [],
+                })
+                i += 2
+                continue
+        i += 1
+    return gpus
+
+
+def _attach_mx_processes(gpus, proc_output):
+    """Parse mx-smi process output (gpu_idx,pid,mem,user,exp) and attach to GPUs."""
+    gpu_by_index = {g["index"]: g for g in gpus}
+    for line in proc_output.split("\n"):
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) >= 4 and parts[0].isdigit():
+            user = parts[3] if parts[3] else "unknown"
+            if user in SYSTEM_USERS:
+                continue
+            gpu_idx = int(parts[0])
+            proc = {
+                "pid": int(parts[1]),
+                "gpu_memory_mb": float(parts[2]) if parts[2] else 0,
+                "user": user,
+                "command": "",
+            }
+            if gpu_idx in gpu_by_index:
+                gpu_by_index[gpu_idx]["processes"].append(proc)
+
+
+# ── TPU helpers ───────────────────────────────────────────────────────────────
+_TPU_HBM_MB_PER_CHIP = {
+    "v4": 32 * 1024,   # 32 GB HBM
+    "v5e": 16 * 1024,  # 16 GB HBM
+    "v6e": 32 * 1024,  # 32 GB HBM
+}
+_TPU_DEFAULT_HBM_MB = 32 * 1024
+
+
+def _build_tpu_gpus(chip_count_output):
+    """Build GPU-like dicts for each TPU chip.
+    Memory is known spec; utilization is unknown until torch_xla is installed.
+    Uses -1 as sentinel for 'unknown' in numeric fields.
+    """
+    try:
+        num_chips = int(chip_count_output.strip().split()[0])
+    except (ValueError, IndexError):
+        num_chips = 4  # default for *-8 node
+    hbm_mb = _TPU_DEFAULT_HBM_MB
+    return [
+        {
+            "index": i,
+            "name": "Google TPU v4",
+            "memory_total_mb": hbm_mb,
+            "memory_used_mb": -1,   # unknown without torch_xla
+            "memory_free_mb": -1,
+            "memory_usage_pct": -1,
+            "gpu_utilization_pct": -1,
+            "temperature_c": -1,
+            "processes": [],
+        }
+        for i in range(num_chips)
+    ]
+
+
+def _attach_tpu_processes(gpus, proc_output):
+    """Attach running Python processes to chip 0 (can't determine per-chip assignment)."""
+    if not gpus or not proc_output.strip():
+        return
+    for line in proc_output.strip().split("\n"):
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) < 4:
+            continue
+        try:
+            pid = int(parts[0])
+        except ValueError:
+            continue
+        user = parts[3] if len(parts) > 3 else "unknown"
+        if user in SYSTEM_USERS:
+            continue
+        proc = {
+            "pid": pid,
+            "gpu_memory_mb": 0,
+            "user": user,
+            "command": parts[4] if len(parts) > 4 else "",
+        }
+        gpus[0]["processes"].append(proc)
 
 
 def _make_ssh_client(hostname, port, user, identity_file, sock=None):
@@ -187,6 +359,7 @@ def query_gpu(host_info, hosts_by_alias=None):
     try:
         sock = None
         proxy_alias = host_info.get("proxy_jump")
+        proxy_cmd = host_info.get("proxy_command")
         if proxy_alias:
             # Resolve jump host info
             jump_info = (hosts_by_alias or {}).get(proxy_alias) or {
@@ -204,29 +377,44 @@ def query_gpu(host_info, hosts_by_alias=None):
             sock = jump_client.get_transport().open_channel(
                 "direct-tcpip", (hostname, port), ("", 0)
             )
+        elif proxy_cmd:
+            # ProxyCommand: execute the command and use its stdio as socket
+            cmd = proxy_cmd.replace("%h", hostname).replace("%p", str(port))
+            sock = paramiko.ProxyCommand(cmd)
 
         client = _make_ssh_client(hostname, port, user, host_info.get("identity_file"), sock=sock)
 
         # Single exec_command for both GPU stats and process info
-        _, stdout, _ = client.exec_command(COMBINED_CMD, timeout=SSH_TIMEOUT)
+        # Wrap in bash -c to avoid issues with non-bash login shells (e.g. fish)
+        _, stdout, _ = client.exec_command("bash -c " + shlex.quote(COMBINED_CMD), timeout=SSH_TIMEOUT)
         output = stdout.read().decode("utf-8").strip()
         client.close()
 
-        gpu_part, proc_part = _parse_combined_output(output)
+        gpu_part, proc_part, vendor = _parse_combined_output(output)
 
         if not gpu_part:
             result["status"] = "no_gpu"
-            result["error"] = "No NVIDIA GPU found or nvidia-smi not available"
+            result["error"] = "No supported GPU found (tried nvidia-smi, mx-smi, and TPU)"
         else:
-            gpus = _build_gpus(gpu_part)
-            if proc_part:
-                _attach_processes(gpus, proc_part)
+            if vendor == "mx":
+                gpus = _build_mx_gpus(gpu_part)
+                if proc_part:
+                    _attach_mx_processes(gpus, proc_part)
+            elif vendor == "tpu":
+                gpus = _build_tpu_gpus(gpu_part)
+                if proc_part:
+                    _attach_tpu_processes(gpus, proc_part)
+                result["is_tpu"] = True
+            else:
+                gpus = _build_gpus(gpu_part)
+                if proc_part:
+                    _attach_processes(gpus, proc_part)
             result["gpus"] = gpus
             if gpus:
                 result["status"] = "ok"
             else:
                 result["status"] = "no_gpu"
-                result["error"] = "nvidia-smi returned no valid GPU data"
+                result["error"] = "No valid accelerator data returned"
 
     except paramiko.AuthenticationException:
         result["error"] = "Authentication failed"
@@ -286,24 +474,34 @@ def query_local_gpu():
 
     try:
         output = subprocess.run(
-            COMBINED_CMD, shell=True, capture_output=True, text=True, timeout=15
+            COMBINED_CMD, shell=True, capture_output=True, text=True, timeout=30
         ).stdout.strip()
 
-        gpu_part, proc_part = _parse_combined_output(output)
+        gpu_part, proc_part, vendor = _parse_combined_output(output)
 
         if not gpu_part:
             result["status"] = "no_gpu"
-            result["error"] = "No NVIDIA GPU found or nvidia-smi not available"
+            result["error"] = "No supported GPU found (tried nvidia-smi, mx-smi, and TPU)"
         else:
-            gpus = _build_gpus(gpu_part)
-            if proc_part:
-                _attach_processes(gpus, proc_part)
+            if vendor == "mx":
+                gpus = _build_mx_gpus(gpu_part)
+                if proc_part:
+                    _attach_mx_processes(gpus, proc_part)
+            elif vendor == "tpu":
+                gpus = _build_tpu_gpus(gpu_part)
+                if proc_part:
+                    _attach_tpu_processes(gpus, proc_part)
+                result["is_tpu"] = True
+            else:
+                gpus = _build_gpus(gpu_part)
+                if proc_part:
+                    _attach_processes(gpus, proc_part)
             result["gpus"] = gpus
             if gpus:
                 result["status"] = "ok"
             else:
                 result["status"] = "no_gpu"
-                result["error"] = "nvidia-smi returned no valid GPU data"
+                result["error"] = "No valid accelerator data returned"
 
     except FileNotFoundError:
         result["status"] = "no_gpu"

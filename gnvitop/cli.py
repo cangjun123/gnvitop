@@ -144,7 +144,11 @@ def main():
                     "memory_used_mb": gpu["memory_used_mb"],
                     "memory_free_mb": gpu["memory_free_mb"],
                     "gpu_utilization_pct": gpu["gpu_utilization_pct"],
-                    "available": gpu["gpu_utilization_pct"] < 10 and gpu["memory_used_mb"] < gpu["memory_total_mb"] * 0.1,
+                    "available": (
+                        len(gpu.get("processes", [])) == 0
+                        if gpu["gpu_utilization_pct"] < 0
+                        else gpu["gpu_utilization_pct"] < 10 and gpu["memory_used_mb"] < gpu["memory_total_mb"] * 0.1
+                    ),
                 })
             output.append({
                 "host": host["alias"],

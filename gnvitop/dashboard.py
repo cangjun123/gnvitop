@@ -170,6 +170,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .host-card.status-no_gpu { border-left: 3px solid #eab308; }
   .host-card.status-error { border-left: 3px solid #ef4444; }
   .host-card.is-local { border-left: 3px solid #60a5fa; }
+  .host-card.is-tpu { border-left: 3px solid #a78bfa; }
 
   .host-header {
     padding: 16px 20px;
@@ -201,6 +202,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .badge-ok { background: #052e16; color: #4ade80; }
   .badge-no_gpu { background: #422006; color: #facc15; }
   .badge-error { background: #450a0a; color: #f87171; }
+  .badge-tpu { background: #2e1065; color: #a78bfa; }
 
   .host-body { padding: 16px 20px; }
 
@@ -927,23 +929,26 @@ function renderProcessUsers(processes, hostUser) {
 }
 
 function renderGPU(gpu, hostUser) {
-  const memPct = gpu.memory_usage_pct;
-  const gpuPct = gpu.gpu_utilization_pct;
+  const isTpu = gpu.gpu_utilization_pct < 0;
+  const memPct = isTpu ? 0 : gpu.memory_usage_pct;
+  const gpuPct = isTpu ? 0 : gpu.gpu_utilization_pct;
+  const chipLabel = isTpu ? 'Chip' : 'GPU';
+  const memLabel = isTpu
+    ? `? / ${formatMB(gpu.memory_total_mb)}`
+    : `${formatMB(gpu.memory_used_mb)} / ${formatMB(gpu.memory_total_mb)}`;
 
   if (currentMode === 'compact') {
     return `
       <div class="gpu-item">
         <div class="gpu-title">
-          <span class="gpu-name">GPU ${gpu.index}: ${gpu.name}</span>
+          <span class="gpu-name">${chipLabel} ${gpu.index}: ${gpu.name}</span>
         </div>
         <div class="bar-container">
           <div class="bar-label">
-            <span>Memory</span>
-            <span>${formatMB(gpu.memory_used_mb)} / ${formatMB(gpu.memory_total_mb)}</span>
+            <span>HBM</span>
+            <span>${memLabel}</span>
           </div>
-          <div class="bar-track">
-            <div class="bar-fill ${usageClass(memPct)}" style="width:${memPct}%"></div>
-          </div>
+          ${isTpu ? '' : `<div class="bar-track"><div class="bar-fill ${usageClass(memPct)}" style="width:${memPct}%"></div></div>`}
         </div>
         ${renderProcessUsers(gpu.processes, hostUser)}
       </div>
@@ -954,39 +959,35 @@ function renderGPU(gpu, hostUser) {
   return `
     <div class="gpu-item">
       <div class="gpu-title">
-        <span class="gpu-name">GPU ${gpu.index}: ${gpu.name}</span>
-        <span class="gpu-temp ${tempClass(gpu.temperature_c)}">${gpu.temperature_c}&deg;C</span>
+        <span class="gpu-name">${chipLabel} ${gpu.index}: ${gpu.name}</span>
+        ${isTpu ? '' : `<span class="gpu-temp ${tempClass(gpu.temperature_c)}">${gpu.temperature_c}&deg;C</span>`}
       </div>
       <div class="bar-container">
         <div class="bar-label">
-          <span>GPU Utilization</span>
-          <span>${gpuPct}%</span>
+          <span>${isTpu ? 'Utilization' : 'GPU Utilization'}</span>
+          <span>${isTpu ? 'N/A (install torch_xla)' : gpuPct + '%'}</span>
         </div>
-        <div class="bar-track">
-          <div class="bar-fill ${usageClass(gpuPct)}" style="width:${gpuPct}%"></div>
-        </div>
+        ${isTpu ? '' : `<div class="bar-track"><div class="bar-fill ${usageClass(gpuPct)}" style="width:${gpuPct}%"></div></div>`}
       </div>
       <div class="bar-container">
         <div class="bar-label">
-          <span>Memory</span>
-          <span>${formatMB(gpu.memory_used_mb)} / ${formatMB(gpu.memory_total_mb)}</span>
+          <span>HBM Memory</span>
+          <span>${memLabel}</span>
         </div>
-        <div class="bar-track">
-          <div class="bar-fill ${usageClass(memPct)}" style="width:${memPct}%"></div>
-        </div>
+        ${isTpu ? '' : `<div class="bar-track"><div class="bar-fill ${usageClass(memPct)}" style="width:${memPct}%"></div></div>`}
       </div>
       ${renderProcessUsers(gpu.processes, hostUser)}
       <div class="gpu-stats">
         <div class="stat">
-          <div class="stat-value" style="color:${gpuPct < 10 ? '#4ade80' : gpuPct < 50 ? '#facc15' : '#f87171'}">${gpuPct}%</div>
+          <div class="stat-value" style="color:#94a3b8">${isTpu ? 'N/A' : `<span style="color:${gpuPct < 10 ? '#4ade80' : gpuPct < 50 ? '#facc15' : '#f87171'}">${gpuPct}%</span>`}</div>
           <div class="stat-label">Utilization</div>
         </div>
         <div class="stat">
-          <div class="stat-value">${formatMB(gpu.memory_free_mb)}</div>
-          <div class="stat-label">Free Memory</div>
+          <div class="stat-value">${isTpu ? formatMB(gpu.memory_total_mb) : formatMB(gpu.memory_free_mb)}</div>
+          <div class="stat-label">${isTpu ? 'HBM Total' : 'Free Memory'}</div>
         </div>
         <div class="stat">
-          <div class="stat-value">${gpu.temperature_c}&deg;C</div>
+          <div class="stat-value" style="color:#94a3b8">${isTpu ? 'N/A' : `${gpu.temperature_c}&deg;C`}</div>
           <div class="stat-label">Temperature</div>
         </div>
       </div>
@@ -1038,12 +1039,15 @@ function renderHosts(hosts) {
       body = `<div class="error-msg">${host.error || 'Unknown error'}</div>`;
     }
     const isLocal    = host.is_local;
+    const isTpu      = !!host.is_tpu;
     const isCollapsed = collapsedHosts.has(host.alias);
-    const badgeClass = isLocal ? 'badge-local' : host.status === 'ok' ? 'badge-ok' : host.status === 'no_gpu' ? 'badge-no_gpu' : 'badge-error';
-    const badgeText  = isLocal ? 'Local' : host.status === 'ok' ? 'Online' : host.status === 'no_gpu' ? 'No GPU' : 'Offline';
-    const cardClass  = `host-card status-${host.status}${isLocal ? ' is-local' : ''}${isCollapsed ? ' collapsed' : ''}${wasFirst ? ' first-render' : ''}`;
+    const badgeClass = isLocal ? 'badge-local' : isTpu ? 'badge-tpu' : host.status === 'ok' ? 'badge-ok' : host.status === 'no_gpu' ? 'badge-no_gpu' : 'badge-error';
+    const badgeText  = isLocal ? 'Local' : isTpu ? 'TPU' : host.status === 'ok' ? 'Online' : host.status === 'no_gpu' ? 'No GPU' : 'Offline';
+    const cardClass  = `host-card status-${host.status}${isLocal ? ' is-local' : ''}${isTpu ? ' is-tpu' : ''}${isCollapsed ? ' collapsed' : ''}${wasFirst ? ' first-render' : ''}`;
     const collapsedInfo = (isCollapsed && host.status === 'ok')
-      ? `<div class="collapsed-info">${host.gpus.length} GPU${host.gpus.length !== 1 ? 's' : ''} &nbsp;·&nbsp; Free: ${formatMB(host.gpus.reduce((s, g) => s + g.memory_free_mb, 0))}</div>`
+      ? isTpu
+        ? `<div class="collapsed-info">${host.gpus.length} chip${host.gpus.length !== 1 ? 's' : ''} &nbsp;·&nbsp; ${formatMB(host.gpus[0].memory_total_mb * host.gpus.length)} HBM</div>`
+        : `<div class="collapsed-info">${host.gpus.length} GPU${host.gpus.length !== 1 ? 's' : ''} &nbsp;·&nbsp; Free: ${formatMB(host.gpus.reduce((s, g) => s + g.memory_free_mb, 0))}</div>`
       : '';
     const alias = host.alias.replace(/'/g, "\\'");
     return `
