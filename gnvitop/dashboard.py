@@ -104,24 +104,18 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     gap: 16px;
   }
 
+  .header-right > .header-divider,
+  .header-right > .theme-toggle,
+  .header-right > .mode-toggle,
+  .header-right > .toggle-switch,
+  .header-right > .global-watch-btn,
+  .header-right > .interval-select {
+    display: none;
+  }
+
   .status-text {
     font-size: 13px;
     color: #94a3b8;
-  }
-
-  .github-link {
-    display: flex;
-    align-items: center;
-    color: #94a3b8;
-    text-decoration: none;
-    transition: color 0.2s;
-  }
-  .github-link:hover { color: #f1f5f9; }
-  .github-link svg { width: 22px; height: 22px; fill: currentColor; }
-  .github-link .version-tag {
-    font-size: 12px;
-    margin-left: 5px;
-    opacity: 0.8;
   }
 
   .header-divider {
@@ -537,6 +531,124 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   }
   .interval-select:hover { border-color: #475569; color: #cbd5e1; }
 
+  .settings-button {
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #334155;
+    background: #1e293b;
+    color: #e2e8f0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .settings-button:hover {
+    border-color: #475569;
+    background: #334155;
+    color: #f1f5f9;
+  }
+  .settings-button svg {
+    width: 17px;
+    height: 17px;
+    fill: currentColor;
+  }
+
+  .settings-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    justify-content: flex-end;
+    background: rgba(2, 6, 23, 0.45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+    z-index: 2000;
+  }
+  .settings-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .settings-panel {
+    width: min(380px, calc(100vw - 28px));
+    height: 100%;
+    background: #1e293b;
+    border-left: 1px solid #334155;
+    box-shadow: -16px 0 40px rgba(0,0,0,0.28);
+    padding: 22px;
+    transform: translateX(100%);
+    transition: transform 0.22s ease;
+    overflow-y: auto;
+  }
+  .settings-overlay.open .settings-panel { transform: translateX(0); }
+  .settings-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .settings-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #f1f5f9;
+  }
+  .settings-subtitle {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-top: 4px;
+  }
+  .settings-close {
+    width: 30px;
+    height: 30px;
+    border: 1px solid #334155;
+    background: #0f172a;
+    color: #94a3b8;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 20px;
+    line-height: 1;
+  }
+  .settings-close:hover {
+    color: #f1f5f9;
+    border-color: #475569;
+  }
+  .settings-section {
+    padding: 16px 0;
+    border-top: 1px solid #334155;
+  }
+  .settings-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #64748b;
+    letter-spacing: 0.7px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 38px;
+    color: #cbd5e1;
+    font-size: 13px;
+  }
+  .settings-row + .settings-row { margin-top: 12px; }
+  .settings-note {
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.45;
+    margin-top: 8px;
+  }
+  .settings-global-watch {
+    border: 1px solid #334155;
+    border-radius: 8px;
+    width: 34px;
+    height: 30px;
+  }
+
   /* Compact mode */
   body.compact .summary-bar { display: none; }
   body.compact .host-grid { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 12px; }
@@ -653,7 +765,6 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .stat .stat-value { color: var(--text-strong); }
 
   .status-text,
-  .github-link,
   .summary-card .label,
   .bar-label,
   .loading,
@@ -670,7 +781,6 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .theme-toggle button,
   .folded-label { color: var(--text-subtle); }
 
-  .github-link:hover,
   .toggle-switch:hover,
   .interval-select:hover,
   .mode-toggle button.active,
@@ -680,7 +790,9 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 
   .summary-card,
   .host-card,
-  .btn-refresh {
+  .btn-refresh,
+  .settings-button,
+  .settings-panel {
     background: var(--surface);
     border-color: var(--border);
   }
@@ -694,6 +806,8 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .mode-toggle button:hover,
   .theme-toggle button:hover,
   .btn-refresh:hover,
+  .settings-button:hover,
+  .settings-close:hover,
   .theme-toggle:hover { background: var(--hover-soft); }
 
   .header-divider,
@@ -701,6 +815,11 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .spinner,
   .mode-toggle,
   .theme-toggle,
+  .settings-button,
+  .settings-close,
+  .settings-panel,
+  .settings-section,
+  .settings-global-watch,
   .interval-select,
   #ui-tooltip,
   .watch-btn .watch-tooltip,
@@ -713,12 +832,15 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 
   .gpu-item + .gpu-item { border-top-color: var(--border); }
   .gpu-name,
+  .settings-row,
+  .settings-title,
   #ui-tooltip,
   .watch-btn .watch-tooltip { color: var(--text); }
   .bar-track,
   .stat,
   .mode-toggle,
   .theme-toggle,
+  .settings-close,
   .interval-select,
   #ui-tooltip,
   .watch-btn .watch-tooltip { background: var(--surface-muted); }
@@ -732,7 +854,10 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .global-watch-btn,
   .drag-handle,
   .collapse-arrow,
-  .watch-btn { color: var(--icon-muted); }
+  .watch-btn,
+  .settings-section-title,
+  .settings-subtitle,
+  .settings-note { color: var(--icon-muted); }
   .badge-ok,
   .temp-cool { background: var(--success-bg); color: var(--success-text); }
   .badge-no_gpu,
@@ -747,7 +872,8 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .user-tag { color: var(--text-muted); }
   #ui-tooltip { box-shadow: var(--shadow-tooltip); }
   .watch-btn .watch-tooltip { box-shadow: var(--shadow-popover); }
-  .btn-refresh { color: var(--text); }
+  .btn-refresh,
+  .settings-button { color: var(--text); }
   .spinner {
     border-color: var(--border);
     border-top-color: var(--local-text);
@@ -802,14 +928,81 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
       <option value="30" selected>30s</option>
       <option value="300">5min</option>
     </select>
-    <a class="github-link" href="https://github.com/Linwei94/gnvitop" target="_blank" title="Star on GitHub">
-      <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
-        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
-      </svg>
-      <span class="version-tag">v{{GNVITOP_VERSION}}</span>
-    </a>
     <button class="btn-refresh" id="btn-refresh" onclick="refresh()">Refresh</button>
+    <button class="settings-button" id="settings-button" onclick="toggleSettings(true)" aria-label="Open settings" data-tip="Open settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M19.43 12.98c.04-.32.07-.65.07-.98s-.02-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.37-.31-.6-.22l-2.49 1a7.2 7.2 0 0 0-1.69-.98L14.5 2.42A.5.5 0 0 0 14 2h-4a.5.5 0 0 0-.49.42L9.13 5.07c-.6.24-1.17.57-1.69.98l-2.49-1a.5.5 0 0 0-.6.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65c-.04.32-.08.65-.08.98s.03.66.08.98l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46c.12.22.37.31.6.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.04.24.25.42.49.42h4c.24 0 .45-.18.49-.42l.38-2.65c.6-.24 1.17-.57 1.69-.98l2.49 1c.23.08.48 0 .6-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"/>
+      </svg>
+    </button>
   </div>
+</div>
+
+<div class="settings-overlay" id="settings-overlay" onclick="closeSettingsOnBackdrop(event)">
+  <aside class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="settings-head">
+      <div>
+        <div class="settings-title" id="settings-title">Settings</div>
+        <div class="settings-subtitle">Customize dashboard appearance and refresh behavior.</div>
+      </div>
+      <button class="settings-close" onclick="toggleSettings(false)" aria-label="Close settings">&times;</button>
+    </div>
+
+    <section class="settings-section">
+      <div class="settings-section-title">Appearance</div>
+      <div class="settings-row">
+        <span>Theme</span>
+        <div class="theme-toggle">
+          <button onclick="setSettingsTheme('dark')" id="settings-theme-dark">Dark</button>
+          <button onclick="setSettingsTheme('light')" id="settings-theme-light">Light</button>
+        </div>
+      </div>
+      <div class="settings-row">
+        <span>Layout</span>
+        <div class="mode-toggle">
+          <button onclick="setSettingsMode('compact')" id="settings-mode-compact">Compact</button>
+          <button onclick="setSettingsMode('normal')" id="settings-mode-normal">Expand</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="settings-section">
+      <div class="settings-section-title">Notifications</div>
+      <div class="settings-row">
+        <span>Notify on free GPUs</span>
+        <label class="toggle-switch" data-tip="Enable GPU availability notifications. Use the bell on each card to select hosts.">
+          <input type="checkbox" id="settings-notify-toggle" onchange="setSettingsNotify(this.checked)">
+          <span class="toggle-knob"></span>
+          <span class="toggle-label">Notify</span>
+        </label>
+      </div>
+      <div class="settings-row">
+        <span>Watch all hosts</span>
+        <button class="global-watch-btn settings-global-watch" id="settings-global-watch-btn" onclick="toggleGlobalWatch()" data-tip="Watch all hosts for free GPUs">&#128277;</button>
+      </div>
+      <div class="settings-note">Per-host watch buttons remain available on each server card when notifications are enabled.</div>
+    </section>
+
+    <section class="settings-section">
+      <div class="settings-section-title">Refresh</div>
+      <div class="settings-row">
+        <span>Auto refresh</span>
+        <label class="toggle-switch" data-tip="Automatically fetch latest GPU data at the selected interval">
+          <input type="checkbox" id="settings-auto-refresh" onchange="setSettingsAutoRefresh(this.checked)" checked>
+          <span class="toggle-knob"></span>
+          <span class="toggle-label">Enabled</span>
+        </label>
+      </div>
+      <div class="settings-row">
+        <span>Interval</span>
+        <select class="interval-select" id="settings-interval-select" onchange="setSettingsInterval(this.value)" data-tip="Auto-refresh interval">
+          <option value="5">5s</option>
+          <option value="10">10s</option>
+          <option value="30" selected>30s</option>
+          <option value="300">5min</option>
+        </select>
+      </div>
+    </section>
+  </aside>
 </div>
 
 <div id="ui-tooltip"></div>
@@ -858,12 +1051,89 @@ function setTheme(theme) {
   currentTheme = theme === 'light' ? 'light' : 'dark';
   document.documentElement.classList.toggle('theme-light', currentTheme === 'light');
   localStorage.setItem('gnvitop-theme', currentTheme);
-  document.getElementById('theme-dark').classList.toggle('active', currentTheme === 'dark');
-  document.getElementById('theme-light').classList.toggle('active', currentTheme === 'light');
+  const darkBtn = document.getElementById('theme-dark');
+  const lightBtn = document.getElementById('theme-light');
+  if (darkBtn) darkBtn.classList.toggle('active', currentTheme === 'dark');
+  if (lightBtn) lightBtn.classList.toggle('active', currentTheme === 'light');
+  syncSettingsControls();
 }
 
 function toggleTheme() {
   setTheme(currentTheme === 'light' ? 'dark' : 'light');
+}
+
+function toggleSettings(open) {
+  const overlay = document.getElementById('settings-overlay');
+  if (!overlay) return;
+  syncSettingsControls();
+  overlay.classList.toggle('open', !!open);
+}
+
+function closeSettingsOnBackdrop(event) {
+  if (event.target.id === 'settings-overlay') toggleSettings(false);
+}
+
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') toggleSettings(false);
+});
+
+function syncSettingsControls() {
+  const stDark = document.getElementById('settings-theme-dark');
+  const stLight = document.getElementById('settings-theme-light');
+  const smCompact = document.getElementById('settings-mode-compact');
+  const smNormal = document.getElementById('settings-mode-normal');
+  const sNotify = document.getElementById('settings-notify-toggle');
+  const sAuto = document.getElementById('settings-auto-refresh');
+  const sInterval = document.getElementById('settings-interval-select');
+  if (stDark) stDark.classList.toggle('active', currentTheme === 'dark');
+  if (stLight) stLight.classList.toggle('active', currentTheme === 'light');
+  if (smCompact) smCompact.classList.toggle('active', currentMode === 'compact');
+  if (smNormal) smNormal.classList.toggle('active', currentMode === 'normal');
+  if (sNotify) sNotify.checked = notifyEnabled;
+  const auto = document.getElementById('auto-refresh');
+  if (sAuto && auto) sAuto.checked = auto.checked;
+  if (sInterval) sInterval.value = String(refreshIntervalSecs);
+  syncSettingsGlobalWatchBtn();
+}
+
+function setSettingsTheme(theme) {
+  setTheme(theme);
+}
+
+function setSettingsMode(mode) {
+  setMode(mode);
+}
+
+function setSettingsNotify(enabled) {
+  const notify = document.getElementById('notify-toggle');
+  if (notify) notify.checked = enabled;
+  setNotifyEnabled(enabled);
+  syncSettingsControls();
+}
+
+function setSettingsAutoRefresh(enabled) {
+  const auto = document.getElementById('auto-refresh');
+  if (auto) {
+    auto.checked = enabled;
+    if (typeof auto.onchange === 'function') auto.onchange();
+  }
+  syncSettingsControls();
+}
+
+function setSettingsInterval(secs) {
+  const interval = document.getElementById('interval-select');
+  if (interval) interval.value = secs;
+  setInterval_(secs);
+  syncSettingsControls();
+}
+
+function syncSettingsGlobalWatchBtn() {
+  const source = document.getElementById('global-watch-btn');
+  const target = document.getElementById('settings-global-watch-btn');
+  if (!source || !target) return;
+  target.textContent = source.textContent;
+  target.classList.toggle('watching', source.classList.contains('watching'));
+  target.title = source.title;
 }
 
 function _applyHostOrder(list) {
@@ -930,6 +1200,7 @@ function setNotifyEnabled(enabled) {
   localStorage.setItem('gnvitop-notify', enabled);
   document.body.classList.toggle('notify-off', !enabled);
   if (enabled && Notification.permission === 'default') Notification.requestPermission();
+  syncSettingsControls();
 }
 
 function toggleWatch(alias) {
@@ -1039,7 +1310,14 @@ function toggleGlobalWatch() {
     void btn.offsetWidth;
     btn.classList.add('watch-pop');
   }
+  const settingsBtn = document.getElementById('settings-global-watch-btn');
+  if (settingsBtn) {
+    settingsBtn.classList.remove('watch-pop');
+    void settingsBtn.offsetWidth;
+    settingsBtn.classList.add('watch-pop');
+  }
   if (lastData) renderHosts(lastData.hosts);
+  syncSettingsControls();
 }
 
 function _updateGlobalWatchBtn() {
@@ -1050,6 +1328,7 @@ function _updateGlobalWatchBtn() {
   btn.classList.toggle('watching', allWatched);
   btn.textContent = allWatched ? '\uD83D\uDD14' : '\uD83D\uDD15';
   btn.title = allWatched ? 'Unwatch all hosts' : 'Watch all hosts for free GPUs';
+  syncSettingsGlobalWatchBtn();
 }
 
 function setInterval_(secs) {
@@ -1061,10 +1340,13 @@ function setInterval_(secs) {
 function setMode(mode) {
   currentMode = mode;
   document.body.classList.toggle('compact', mode === 'compact');
-  document.getElementById('mode-normal').classList.toggle('active', mode === 'normal');
-  document.getElementById('mode-compact').classList.toggle('active', mode === 'compact');
+  const normalBtn = document.getElementById('mode-normal');
+  const compactBtn = document.getElementById('mode-compact');
+  if (normalBtn) normalBtn.classList.toggle('active', mode === 'normal');
+  if (compactBtn) compactBtn.classList.toggle('active', mode === 'compact');
   localStorage.setItem('gnvitop-mode', mode);
   if (lastData) { renderSummary(lastData.hosts); renderHosts(lastData.hosts); }
+  syncSettingsControls();
 }
 currentMode = localStorage.getItem('gnvitop-mode') || 'normal';
 setMode(currentMode);
