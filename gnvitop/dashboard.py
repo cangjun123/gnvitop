@@ -7,15 +7,81 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>gnvitop — {{GNVITOP_HOST_INFO}}</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%2338bdf8'/%3E%3Cstop offset='100%25' stop-color='%23a78bfa'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='4' y='4' width='56' height='56' rx='16' fill='url(%23g)'/%3E%3Cpath d='M12 34 L22 34 L27 18 L33 46 L38 28 L43 34 L52 34' fill='none' stroke='white' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<script>
+  try {
+    if (localStorage.getItem('gnvitop-theme') === 'light') {
+      document.documentElement.classList.add('theme-light');
+    }
+  } catch (e) {}
+</script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
+  :root {
+    color-scheme: dark;
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface-muted: #0f172a;
+    --border: #334155;
+    --border-hover: #475569;
+    --text: #e2e8f0;
+    --text-strong: #f1f5f9;
+    --text-muted: #94a3b8;
+    --text-subtle: #64748b;
+    --icon-muted: #475569;
+    --hover-soft: rgba(255,255,255,0.03);
+    --shadow-card: 0 8px 24px rgba(0,0,0,0.3);
+    --shadow-tooltip: 0 4px 16px rgba(0,0,0,0.5);
+    --shadow-popover: 0 4px 12px rgba(0,0,0,0.4);
+    --success-bg: #052e16;
+    --success-text: #4ade80;
+    --warning-bg: #422006;
+    --warning-text: #facc15;
+    --error-bg: #450a0a;
+    --error-text: #f87171;
+    --tpu-bg: #2e1065;
+    --tpu-text: #a78bfa;
+    --local-bg: #172554;
+    --local-text: #60a5fa;
+    --refresh-pulse-bg: #1e3a5f;
+  }
+
+  html.theme-light {
+    color-scheme: light;
+    --bg: #e9eef5;
+    --surface: #f1f5f9;
+    --surface-muted: #e2e8f0;
+    --border: #d4dde8;
+    --border-hover: #aebccd;
+    --text: #334155;
+    --text-strong: #0f172a;
+    --text-muted: #64748b;
+    --text-subtle: #738095;
+    --icon-muted: #94a3b8;
+    --hover-soft: rgba(15,23,42,0.04);
+    --shadow-card: 0 10px 26px rgba(15,23,42,0.10);
+    --shadow-tooltip: 0 10px 26px rgba(15,23,42,0.16);
+    --shadow-popover: 0 8px 20px rgba(15,23,42,0.14);
+    --success-bg: #dcfce7;
+    --success-text: #15803d;
+    --warning-bg: #fef3c7;
+    --warning-text: #a16207;
+    --error-bg: #fee2e2;
+    --error-text: #b91c1c;
+    --tpu-bg: #ede9fe;
+    --tpu-text: #7c3aed;
+    --local-bg: #dbeafe;
+    --local-text: #2563eb;
+    --refresh-pulse-bg: #dbeafe;
+  }
+
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: #0f172a;
-    color: #e2e8f0;
+    background: var(--bg);
+    color: var(--text);
     min-height: 100vh;
     padding: 24px;
+    transition: background 0.2s, color 0.2s;
   }
 
   .header {
@@ -428,6 +494,26 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .mode-toggle button:hover { color: #94a3b8; background: #1e293b; }
   .mode-toggle button.active { background: #334155; color: #e2e8f0; }
 
+  .theme-toggle {
+    display: flex;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .theme-toggle button {
+    padding: 5px 11px;
+    border: none;
+    background: transparent;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .theme-toggle button:hover { color: #94a3b8; background: #1e293b; }
+  .theme-toggle button.active { background: #334155; color: #e2e8f0; }
+
   /* Initial load animation only */
   .host-card.first-render {
     animation: fadeSlideIn 0.3s ease;
@@ -561,6 +647,111 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .host-grid-folded .host-card { opacity: 0.75; }
   .host-grid-folded .host-card:hover { opacity: 1; }
 
+  /* Theme-aware color overrides */
+  .header h1,
+  .host-name,
+  .stat .stat-value { color: var(--text-strong); }
+
+  .status-text,
+  .github-link,
+  .summary-card .label,
+  .bar-label,
+  .loading,
+  .toggle-switch,
+  .drag-handle:hover,
+  .global-watch-btn:hover,
+  .watch-btn:hover { color: var(--text-muted); }
+
+  .host-info,
+  .stat .stat-label,
+  .user-mem,
+  .collapsed-info,
+  .mode-toggle button,
+  .theme-toggle button,
+  .folded-label { color: var(--text-subtle); }
+
+  .github-link:hover,
+  .toggle-switch:hover,
+  .interval-select:hover,
+  .mode-toggle button.active,
+  .theme-toggle button.active,
+  .theme-toggle:hover,
+  .btn-refresh:hover { color: var(--text-strong); }
+
+  .summary-card,
+  .host-card,
+  .btn-refresh {
+    background: var(--surface);
+    border-color: var(--border);
+  }
+
+  .host-card:hover {
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-card);
+  }
+
+  .host-header:hover,
+  .mode-toggle button:hover,
+  .theme-toggle button:hover,
+  .btn-refresh:hover,
+  .theme-toggle:hover { background: var(--hover-soft); }
+
+  .header-divider,
+  .host-header,
+  .spinner,
+  .mode-toggle,
+  .theme-toggle,
+  .interval-select,
+  #ui-tooltip,
+  .watch-btn .watch-tooltip,
+  .folded-divider::before,
+  .folded-divider::after { border-color: var(--border); }
+
+  .header-divider,
+  .folded-divider::before,
+  .folded-divider::after { background: var(--border); }
+
+  .gpu-item + .gpu-item { border-top-color: var(--border); }
+  .gpu-name,
+  #ui-tooltip,
+  .watch-btn .watch-tooltip { color: var(--text); }
+  .bar-track,
+  .stat,
+  .mode-toggle,
+  .theme-toggle,
+  .interval-select,
+  #ui-tooltip,
+  .watch-btn .watch-tooltip { background: var(--surface-muted); }
+  .interval-select { color: var(--text-muted); }
+  .toggle-knob,
+  .mode-toggle button.active,
+  .theme-toggle button.active,
+  .user-tag { background: var(--border); }
+  .toggle-knob::after { background: var(--text-muted); }
+  .toggle-switch input:checked ~ .toggle-label { color: var(--text); }
+  .global-watch-btn,
+  .drag-handle,
+  .collapse-arrow,
+  .watch-btn { color: var(--icon-muted); }
+  .badge-ok,
+  .temp-cool { background: var(--success-bg); color: var(--success-text); }
+  .badge-no_gpu,
+  .temp-warm { background: var(--warning-bg); color: var(--warning-text); }
+  .badge-error,
+  .temp-hot { background: var(--error-bg); color: var(--error-text); }
+  .badge-tpu { background: var(--tpu-bg); color: var(--tpu-text); }
+  .badge-local,
+  .user-tag.current-user { background: var(--local-bg); color: var(--local-text); }
+  .error-msg { color: var(--error-text); }
+  .no-gpu-msg { color: var(--warning-text); }
+  .user-tag { color: var(--text-muted); }
+  #ui-tooltip { box-shadow: var(--shadow-tooltip); }
+  .watch-btn .watch-tooltip { box-shadow: var(--shadow-popover); }
+  .btn-refresh { color: var(--text); }
+  .spinner {
+    border-color: var(--border);
+    border-top-color: var(--local-text);
+  }
 
 </style>
 </head>
@@ -582,6 +773,11 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   </h1>
   <div class="header-right">
     <span class="status-text" id="update-time"></span>
+    <div class="header-divider"></div>
+    <div class="theme-toggle" id="theme-toggle" data-tip="Switch dashboard theme">
+      <button onclick="setTheme('dark')" id="theme-dark">Dark</button>
+      <button onclick="setTheme('light')" id="theme-light">Light</button>
+    </div>
     <div class="header-divider"></div>
     <div class="mode-toggle" id="mode-toggle">
       <button onclick="setMode('compact')" id="mode-compact" data-tip="Compact view: smaller cards, hide host details">Compact</button>
@@ -656,6 +852,19 @@ let lastData = null;
 let isFirstRender = true;
 let refreshIntervalSecs = parseInt(localStorage.getItem('gnvitop-interval') || '30');
 let hostOrder = JSON.parse(localStorage.getItem('gnvitop-order') || '[]'); // pinned manual order
+let currentTheme = localStorage.getItem('gnvitop-theme') || 'dark';
+
+function setTheme(theme) {
+  currentTheme = theme === 'light' ? 'light' : 'dark';
+  document.documentElement.classList.toggle('theme-light', currentTheme === 'light');
+  localStorage.setItem('gnvitop-theme', currentTheme);
+  document.getElementById('theme-dark').classList.toggle('active', currentTheme === 'dark');
+  document.getElementById('theme-light').classList.toggle('active', currentTheme === 'light');
+}
+
+function toggleTheme() {
+  setTheme(currentTheme === 'light' ? 'dark' : 'light');
+}
 
 function _applyHostOrder(list) {
   if (!hostOrder.length) return list;
@@ -749,11 +958,11 @@ function toggleWatch(alias) {
           const free = host.gpus.filter(g => _gpuAvailable(g));
           if (free.length > 0) {
             const label = free.map(g => 'GPU ' + g.index + ' (' + Math.round(g.memory_free_mb/1024*10)/10 + 'GB free)').join('<br>');
-            tooltip.style.color = '#4ade80';
-            tooltip.innerHTML = free.length + ' GPU' + (free.length>1?'s':'') + ' available:<br>' + label + '<br><span style="color:#94a3b8">' + (watching ? 'Click to stop watching' : 'Click to watch') + '</span>';
+            tooltip.style.color = 'var(--success-text)';
+            tooltip.innerHTML = free.length + ' GPU' + (free.length>1?'s':'') + ' available:<br>' + label + '<br><span style="color:var(--text-muted)">' + (watching ? 'Click to stop watching' : 'Click to watch') + '</span>';
           } else {
             tooltip.style.color = '';
-            tooltip.innerHTML = watching ? 'Watching \u2014 notify on free GPU<br><span style="color:#94a3b8">Click to stop</span>' : 'Watch for free GPUs';
+            tooltip.innerHTML = watching ? 'Watching \u2014 notify on free GPU<br><span style="color:var(--text-muted)">Click to stop</span>' : 'Watch for free GPUs';
           }
         }
       }
@@ -895,19 +1104,19 @@ function renderSummary(hosts) {
   document.getElementById('summary-bar').innerHTML = `
     <div class="summary-card">
       <div class="label">Online Hosts</div>
-      <div class="value" style="color:#4ade80">${online.length}<span style="color:#64748b;font-size:16px"> / ${hosts.length}</span></div>
+      <div class="value" style="color:var(--success-text)">${online.length}<span style="color:var(--text-subtle);font-size:16px"> / ${hosts.length}</span></div>
     </div>
     <div class="summary-card">
       <div class="label">Total GPUs</div>
-      <div class="value" style="color:#60a5fa">${totalGPUs}</div>
+      <div class="value" style="color:var(--local-text)">${totalGPUs}</div>
     </div>
     <div class="summary-card">
       <div class="label">Idle GPUs (< 10%)</div>
-      <div class="value" style="color:#4ade80">${idleGPUs}</div>
+      <div class="value" style="color:var(--success-text)">${idleGPUs}</div>
     </div>
     <div class="summary-card">
       <div class="label">Total Free Memory</div>
-      <div class="value" style="color:#a78bfa">${formatMB(totalFree)}</div>
+      <div class="value" style="color:var(--tpu-text)">${formatMB(totalFree)}</div>
     </div>
   `;
 }
@@ -933,6 +1142,7 @@ function renderGPU(gpu, hostUser) {
   const memPct = isTpu ? 0 : gpu.memory_usage_pct;
   const gpuPct = isTpu ? 0 : gpu.gpu_utilization_pct;
   const chipLabel = isTpu ? 'Chip' : 'GPU';
+  const gpuPctColor = gpuPct < 10 ? 'var(--success-text)' : gpuPct < 50 ? 'var(--warning-text)' : 'var(--error-text)';
   const memLabel = isTpu
     ? `? / ${formatMB(gpu.memory_total_mb)}`
     : `${formatMB(gpu.memory_used_mb)} / ${formatMB(gpu.memory_total_mb)}`;
@@ -979,7 +1189,7 @@ function renderGPU(gpu, hostUser) {
       ${renderProcessUsers(gpu.processes, hostUser)}
       <div class="gpu-stats">
         <div class="stat">
-          <div class="stat-value" style="color:#94a3b8">${isTpu ? 'N/A' : `<span style="color:${gpuPct < 10 ? '#4ade80' : gpuPct < 50 ? '#facc15' : '#f87171'}">${gpuPct}%</span>`}</div>
+          <div class="stat-value" style="color:var(--text-muted)">${isTpu ? 'N/A' : `<span style="color:${gpuPctColor}">${gpuPct}%</span>`}</div>
           <div class="stat-label">Utilization</div>
         </div>
         <div class="stat">
@@ -987,7 +1197,7 @@ function renderGPU(gpu, hostUser) {
           <div class="stat-label">${isTpu ? 'HBM Total' : 'Free Memory'}</div>
         </div>
         <div class="stat">
-          <div class="stat-value" style="color:#94a3b8">${isTpu ? 'N/A' : `${gpu.temperature_c}&deg;C`}</div>
+          <div class="stat-value" style="color:var(--text-muted)">${isTpu ? 'N/A' : `${gpu.temperature_c}&deg;C`}</div>
           <div class="stat-label">Temperature</div>
         </div>
       </div>
@@ -1068,7 +1278,7 @@ function renderHosts(hosts) {
               const watching = watchedHosts.has(host.alias);
               if (free.length > 0) {
                 const label = free.map(g => 'GPU ' + g.index + ' (' + Math.round(g.memory_free_mb/1024*10)/10 + 'GB free)').join('<br>');
-                return '<span class="watch-tooltip" style="color:#4ade80">' + free.length + ' GPU' + (free.length>1?'s':'') + ' available:<br>' + label + (watching ? '<br><span style="color:#94a3b8">Click to stop watching</span>' : '<br><span style="color:#94a3b8">Click to watch</span>') + '</span>';
+                return '<span class="watch-tooltip" style="color:var(--success-text)">' + free.length + ' GPU' + (free.length>1?'s':'') + ' available:<br>' + label + (watching ? '<br><span style="color:var(--text-muted)">Click to stop watching</span>' : '<br><span style="color:var(--text-muted)">Click to watch</span>') + '</span>';
               }
               return '<span class="watch-tooltip">' + (watching ? 'Watching — notify on free GPU<br><span style="color:#94a3b8">Click to stop</span>' : 'Watch for free GPUs') + '</span>';
             })()}</button>
@@ -1175,6 +1385,7 @@ function updateTime(ts) {
 }
 
 async function init() {
+  setTheme(currentTheme);
   // Restore notify toggle state
   const notifyChk = document.getElementById('notify-toggle');
   if (notifyChk) {
