@@ -181,47 +181,71 @@ def _dedupe_hosts(hosts):
     return deduped
 
 
-def _config_payload(hosts):
+def _config_payload(hosts, monitor_local=True):
     return {
         "version": 1,
         "imported_from_ssh": True,
         "ssh_config_path": SSH_CONFIG_PATH,
+        "monitor_local": bool(monitor_local),
         "hosts": _dedupe_hosts(hosts),
     }
 
 
-def save_server_config(hosts):
+def save_server_config(hosts, monitor_local=True):
     os.makedirs(os.path.dirname(SERVER_CONFIG_PATH), exist_ok=True)
     with open(SERVER_CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(_config_payload(hosts), f, indent=2)
+        json.dump(_config_payload(hosts, monitor_local), f, indent=2)
 
 
-def load_server_config():
-    """Load managed server config, importing ~/.ssh/config on first run."""
+def load_config_payload():
+    """Load full managed config payload, importing ~/.ssh/config on first run."""
     if not os.path.exists(SERVER_CONFIG_PATH):
         hosts = parse_ssh_config(SSH_CONFIG_PATH)
-        save_server_config(hosts)
-        return _dedupe_hosts(hosts)
+        payload = _config_payload(hosts, monitor_local=True)
+        save_server_config(payload["hosts"], payload["monitor_local"])
+        return payload
 
     try:
         with open(SERVER_CONFIG_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
     except (OSError, json.JSONDecodeError):
-        return []
-    return _dedupe_hosts(data.get("hosts", []))
+        data = {}
+    return {
+        "version": data.get("version", 1),
+        "imported_from_ssh": data.get("imported_from_ssh", True),
+        "ssh_config_path": data.get("ssh_config_path", SSH_CONFIG_PATH),
+        "monitor_local": bool(data.get("monitor_local", True)),
+        "hosts": _dedupe_hosts(data.get("hosts", [])),
+    }
+
+
+def load_server_config():
+    """Load managed server config, importing ~/.ssh/config on first run."""
+    return load_config_payload()["hosts"]
+
+
+def get_monitor_local():
+    return load_config_payload()["monitor_local"]
+
+
+def _host_endpoint_key(host):
+    normalized = _normalize_host_config(host)
+    hostname = (normalized.get("hostname") or normalized.get("alias") or "").lower()
+    return f"{hostname}:{normalized.get('port', 22)}"
 
 
 def import_ssh_hosts(replace=False):
     """Import hosts from SSH config into managed config."""
     imported = _dedupe_hosts(parse_ssh_config(SSH_CONFIG_PATH))
+    monitor_local = get_monitor_local()
     if replace:
-        save_server_config(imported)
+        save_server_config(imported, monitor_local)
         return imported
 
     existing = load_server_config()
-    aliases = {h["alias"] for h in existing}
-    merged = existing + [h for h in imported if h["alias"] not in aliases]
-    save_server_config(merged)
+    endpoints = {_host_endpoint_key(h) for h in existing}
+    merged = existing + [h for h in imported if _host_endpoint_key(h) not in endpoints]
+    save_server_config(merged, monitor_local)
     return merged
 
 
@@ -678,6 +702,7 @@ def discover_gadi_nodes(hosts_by_alias):
 
 def fetch_all_gpu_info():
     """Query all hosts (local + remote) concurrently and return sorted results."""
+    monitor_local = get_monitor_local()
     hosts = [h for h in load_server_config() if h.get("enabled", True)]
     hosts_by_alias = {h["alias"]: h for h in hosts}
 
@@ -690,7 +715,9 @@ def fetch_all_gpu_info():
 
     results = []
     with ThreadPoolExecutor(max_workers=20) as executor:
-        futures = {executor.submit(query_local_gpu): None}
+        futures = {}
+        if monitor_local:
+            futures[executor.submit(query_local_gpu)] = None
         for h in hosts:
             futures[executor.submit(query_gpu, h, hosts_by_alias)] = h
         for future in as_completed(futures):
@@ -760,9 +787,11 @@ def api_gpus():
 
 @app.route("/api/config/hosts", methods=["GET"])
 def api_config_hosts():
-    hosts = [public_host_config(h) for h in load_server_config()]
+    payload = load_config_payload()
+    hosts = [public_host_config(h) for h in payload["hosts"]]
     return jsonify({
         "hosts": hosts,
+        "monitor_local": payload["monitor_local"],
         "config_path": SERVER_CONFIG_PATH,
         "ssh_config_path": SSH_CONFIG_PATH,
     })
@@ -789,10 +818,12 @@ def api_save_config_hosts():
             merged["password"] = existing_passwords.get(str(merged.get("alias") or "").strip())
         normalized.append(_normalize_host_config(merged))
 
-    save_server_config(normalized)
+    monitor_local = bool(payload.get("monitor_local", True))
+    save_server_config(normalized, monitor_local)
     _invalidate_cache()
     return jsonify({
         "hosts": [public_host_config(h) for h in load_server_config()],
+        "monitor_local": get_monitor_local(),
         "config_path": SERVER_CONFIG_PATH,
     })
 
@@ -804,6 +835,7 @@ def api_import_ssh_config():
     _invalidate_cache()
     return jsonify({
         "hosts": [public_host_config(h) for h in hosts],
+        "monitor_local": get_monitor_local(),
         "config_path": SERVER_CONFIG_PATH,
         "ssh_config_path": SSH_CONFIG_PATH,
     })
@@ -822,12 +854,15 @@ def api_refresh():
 def api_stream():
     """SSE endpoint: streams each host result as it arrives, then a 'done' event."""
     def generate():
+        monitor_local = get_monitor_local()
         hosts = [h for h in load_server_config() if h.get("enabled", True)]
         hosts_by_alias = {h["alias"]: h for h in hosts}
         results = []
 
         with ThreadPoolExecutor(max_workers=20) as executor:
-            futures = {executor.submit(query_local_gpu): None}
+            futures = {}
+            if monitor_local:
+                futures[executor.submit(query_local_gpu)] = None
             for h in hosts:
                 futures[executor.submit(query_gpu, h, hosts_by_alias)] = h
 

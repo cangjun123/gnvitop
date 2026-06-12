@@ -1129,6 +1129,14 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
           <option value="300">5min</option>
         </select>
       </div>
+      <div class="settings-row">
+        <span>Monitor localhost</span>
+        <label class="toggle-switch" data-tip="Include this machine as localhost in monitoring results">
+          <input type="checkbox" id="settings-monitor-local" onchange="setSettingsMonitorLocal(this.checked)" checked>
+          <span class="toggle-knob"></span>
+          <span class="toggle-label">Local</span>
+        </label>
+      </div>
     </section>
 
     <section class="settings-section">
@@ -1136,9 +1144,8 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
       <div class="server-toolbar">
         <button class="settings-action" onclick="addServerConfig()">Add Server</button>
         <button class="settings-action" onclick="importSshConfig(false)">Import SSH Config</button>
-        <button class="settings-action" onclick="saveServerConfigs()">Save Servers</button>
       </div>
-      <div class="settings-note">Servers are stored separately from SSH config. Passwords are saved locally in this gnvitop config file.</div>
+      <div class="settings-note">Servers are stored separately from SSH config. Changes are saved automatically. Passwords are saved locally in this gnvitop config file.</div>
       <div class="server-save-status" id="server-save-status"></div>
       <div class="server-list" id="server-list">
         <div class="server-empty">Loading server config...</div>
@@ -1189,6 +1196,8 @@ let refreshIntervalSecs = parseInt(localStorage.getItem('gnvitop-interval') || '
 let hostOrder = JSON.parse(localStorage.getItem('gnvitop-order') || '[]'); // pinned manual order
 let currentTheme = localStorage.getItem('gnvitop-theme') || 'dark';
 let serverConfigs = [];
+let monitorLocal = true;
+let serverSaveTimer = null;
 
 function setTheme(theme) {
   currentTheme = theme === 'light' ? 'light' : 'dark';
@@ -1229,6 +1238,7 @@ function syncSettingsControls() {
   const sNotify = document.getElementById('settings-notify-toggle');
   const sAuto = document.getElementById('settings-auto-refresh');
   const sInterval = document.getElementById('settings-interval-select');
+  const sMonitorLocal = document.getElementById('settings-monitor-local');
   if (stDark) stDark.classList.toggle('active', currentTheme === 'dark');
   if (stLight) stLight.classList.toggle('active', currentTheme === 'light');
   if (smCompact) smCompact.classList.toggle('active', currentMode === 'compact');
@@ -1237,6 +1247,7 @@ function syncSettingsControls() {
   const auto = document.getElementById('auto-refresh');
   if (sAuto && auto) sAuto.checked = auto.checked;
   if (sInterval) sInterval.value = String(refreshIntervalSecs);
+  if (sMonitorLocal) sMonitorLocal.checked = monitorLocal;
   syncSettingsGlobalWatchBtn();
 }
 
@@ -1271,6 +1282,14 @@ function setSettingsInterval(secs) {
   syncSettingsControls();
 }
 
+async function setSettingsMonitorLocal(enabled) {
+  monitorLocal = !!enabled;
+  const status = document.getElementById('server-save-status');
+  if (status) status.textContent = 'Saving local monitoring setting...';
+  syncSettingsControls();
+  scheduleServerConfigSave(0);
+}
+
 function syncSettingsGlobalWatchBtn() {
   const source = document.getElementById('global-watch-btn');
   const target = document.getElementById('settings-global-watch-btn');
@@ -1292,6 +1311,7 @@ async function loadServerConfigs() {
     const resp = await fetch('/api/config/hosts');
     const data = await resp.json();
     serverConfigs = data.hosts || [];
+    monitorLocal = data.monitor_local !== false;
     renderServerConfigs();
   } catch (e) {
     if (list) list.innerHTML = '<div class="server-empty">Failed to load server config.</div>';
@@ -1356,6 +1376,7 @@ function renderServerConfigs() {
 function updateServerField(index, field, value) {
   if (!serverConfigs[index]) return;
   serverConfigs[index][field] = field === 'enabled' ? !!value : value;
+  scheduleServerConfigSave();
 }
 
 function addServerConfig() {
@@ -1373,7 +1394,8 @@ function addServerConfig() {
   });
   renderServerConfigs();
   const status = document.getElementById('server-save-status');
-  if (status) status.textContent = 'Added a new server draft. Fill it in, then click Save Servers.';
+  if (status) status.textContent = 'Added a new server. Auto-saving...';
+  scheduleServerConfigSave(0);
 }
 
 function removeServerConfig(index) {
@@ -1383,7 +1405,8 @@ function removeServerConfig(index) {
   serverConfigs.splice(index, 1);
   renderServerConfigs();
   const status = document.getElementById('server-save-status');
-  if (status) status.textContent = 'Removed server draft. Click Save Servers to apply.';
+  if (status) status.textContent = 'Removed server. Auto-saving...';
+  scheduleServerConfigSave(0);
 }
 
 function serializeServerConfigs() {
@@ -1403,6 +1426,13 @@ function serializeServerConfigs() {
   });
 }
 
+function scheduleServerConfigSave(delay = 700) {
+  clearTimeout(serverSaveTimer);
+  const status = document.getElementById('server-save-status');
+  if (status) status.textContent = delay ? 'Unsaved changes. Auto-saving...' : 'Saving...';
+  serverSaveTimer = setTimeout(saveServerConfigs, delay);
+}
+
 async function saveServerConfigs() {
   const status = document.getElementById('server-save-status');
   if (status) status.textContent = 'Saving...';
@@ -1410,12 +1440,14 @@ async function saveServerConfigs() {
     const resp = await fetch('/api/config/hosts', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({hosts: serializeServerConfigs()}),
+      body: JSON.stringify({hosts: serializeServerConfigs(), monitor_local: monitorLocal}),
     });
     if (!resp.ok) throw new Error('Save failed');
     const data = await resp.json();
     serverConfigs = data.hosts || [];
+    monitorLocal = data.monitor_local !== false;
     renderServerConfigs();
+    syncSettingsControls();
     if (status) status.textContent = 'Saved. Refreshing monitored hosts...';
     refresh();
   } catch (e) {
@@ -1424,6 +1456,10 @@ async function saveServerConfigs() {
 }
 
 async function importSshConfig(replace) {
+  const message = replace
+    ? 'Replace current server config with hosts from SSH config?'
+    : 'Import hosts from SSH config? Existing servers with the same hostname/IP and port will be kept.';
+  if (!confirm(message)) return;
   const status = document.getElementById('server-save-status');
   if (status) status.textContent = 'Importing SSH config...';
   try {
@@ -1435,7 +1471,9 @@ async function importSshConfig(replace) {
     if (!resp.ok) throw new Error('Import failed');
     const data = await resp.json();
     serverConfigs = data.hosts || [];
+    monitorLocal = data.monitor_local !== false;
     renderServerConfigs();
+    syncSettingsControls();
     if (status) status.textContent = 'Imported from SSH config. Refreshing monitored hosts...';
     refresh();
   } catch (e) {
