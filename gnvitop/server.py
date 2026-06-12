@@ -22,8 +22,18 @@ app = Flask(__name__)
 
 SSH_CONFIG_PATH = os.path.expanduser("~/.ssh/config")
 SERVER_CONFIG_PATH = os.path.expanduser("~/.gnvitop/servers.json")
+HISTORY_PATH = os.path.expanduser("~/.gnvitop/history.jsonl")
 SSH_TIMEOUT = 45
 DEFAULT_DISK_PATH = "~"
+HISTORY_RETENTION_SECONDS = 7 * 24 * 60 * 60
+HISTORY_PRUNE_INTERVAL = 60 * 60
+HISTORY_MAX_POINTS = 1200
+HISTORY_RANGES = {
+    "1h": 60 * 60,
+    "6h": 6 * 60 * 60,
+    "24h": 24 * 60 * 60,
+    "7d": HISTORY_RETENTION_SECONDS,
+}
 DEFAULT_METRICS = {
     "gpu": True,
     "cpu": True,
@@ -128,6 +138,8 @@ SYSTEM_USERS = frozenset({
 cache = {"data": [], "last_update": 0}
 cache_lock = threading.Lock()
 CACHE_TTL = 30
+history_lock = threading.Lock()
+_history_last_prune = 0
 
 # Background refresh state
 _bg_refresh_running = False
@@ -885,6 +897,130 @@ def _sort_results(results):
     return results
 
 
+def _as_float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _round_or_none(value, digits=1):
+    value = _as_float(value)
+    return round(value, digits) if value is not None else None
+
+
+def _history_sample(host, timestamp):
+    gpus = host.get("gpus") or []
+    gpu_utils = []
+    for gpu in gpus:
+        util = _as_float(gpu.get("gpu_utilization_pct"))
+        if util is not None and util >= 0:
+            gpu_utils.append(util)
+    mem_totals = [_as_float(g.get("memory_total_mb")) or 0 for g in gpus]
+    mem_free = [_as_float(g.get("memory_free_mb")) for g in gpus]
+    valid_mem_free = [v for v in mem_free if v is not None and v >= 0]
+    gpu_memory_total = sum(v for v in mem_totals if v > 0)
+    gpu_memory_free = sum(valid_mem_free)
+    system = host.get("system") or {}
+    cpu = system.get("cpu") or {}
+    memory = system.get("memory") or {}
+    disk = system.get("disk") or {}
+    return {
+        "timestamp": round(timestamp, 3),
+        "alias": host.get("alias"),
+        "hostname": host.get("hostname"),
+        "status": host.get("status"),
+        "is_local": bool(host.get("is_local")),
+        "gpu_count": len(gpus),
+        "gpu_util_avg": round(sum(gpu_utils) / len(gpu_utils), 1) if gpu_utils else None,
+        "gpu_memory_free_mb": round(gpu_memory_free, 1) if gpu_memory_total and valid_mem_free else None,
+        "gpu_memory_free_pct": round(gpu_memory_free / gpu_memory_total * 100, 1) if gpu_memory_total and valid_mem_free else None,
+        "cpu_pct": _round_or_none(cpu.get("usage_pct")),
+        "memory_pct": _round_or_none(memory.get("usage_pct")),
+        "disk_pct": _round_or_none(disk.get("usage_pct")),
+    }
+
+
+def _prune_history_locked(now):
+    cutoff = now - HISTORY_RETENTION_SECONDS
+    if not os.path.exists(HISTORY_PATH):
+        return
+    tmp_path = HISTORY_PATH + ".tmp"
+    try:
+        with open(HISTORY_PATH, "r", encoding="utf-8") as src, open(tmp_path, "w", encoding="utf-8") as dst:
+            for line in src:
+                try:
+                    item = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                timestamp = _as_float(item.get("timestamp"))
+                if timestamp is not None and timestamp >= cutoff:
+                    dst.write(json.dumps(item, separators=(",", ":")) + "\n")
+        os.replace(tmp_path, HISTORY_PATH)
+    except OSError:
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except OSError:
+            pass
+
+
+def record_history(results, timestamp=None):
+    """Append compact host samples to persistent history and retain seven days."""
+    global _history_last_prune
+    if not results:
+        return
+    now = timestamp or time.time()
+    samples = [
+        _history_sample(host, now)
+        for host in results
+        if host.get("alias")
+    ]
+    if not samples:
+        return
+    with history_lock:
+        os.makedirs(os.path.dirname(HISTORY_PATH), exist_ok=True)
+        with open(HISTORY_PATH, "a", encoding="utf-8") as f:
+            for sample in samples:
+                f.write(json.dumps(sample, separators=(",", ":")) + "\n")
+        if now - _history_last_prune > HISTORY_PRUNE_INTERVAL:
+            _prune_history_locked(now)
+            _history_last_prune = now
+
+
+def _downsample_history(points):
+    if len(points) <= HISTORY_MAX_POINTS:
+        return points
+    step = max(1, (len(points) + HISTORY_MAX_POINTS - 1) // HISTORY_MAX_POINTS)
+    sampled = points[::step]
+    if sampled[-1] is not points[-1]:
+        sampled.append(points[-1])
+    return sampled
+
+
+def load_history(alias, range_key):
+    seconds = HISTORY_RANGES.get(range_key, HISTORY_RANGES["1h"])
+    cutoff = time.time() - seconds
+    points = []
+    with history_lock:
+        if not os.path.exists(HISTORY_PATH):
+            return []
+        with open(HISTORY_PATH, "r", encoding="utf-8") as f:
+            for line in f:
+                try:
+                    item = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if item.get("alias") != alias:
+                    continue
+                timestamp = _as_float(item.get("timestamp"))
+                if timestamp is None or timestamp < cutoff:
+                    continue
+                points.append(item)
+    points.sort(key=lambda item: item.get("timestamp", 0))
+    return _downsample_history(points)
+
+
 def discover_gadi_nodes(hosts_by_alias):
     """SSH to each gadi-like login node and discover allocated GPU compute nodes via qstat.
 
@@ -958,7 +1094,9 @@ def fetch_all_gpu_info():
         for future in as_completed(futures):
             results.append(future.result())
 
-    return _sort_results(results)
+    sorted_results = _sort_results(results)
+    record_history(sorted_results)
+    return sorted_results
 
 
 def _do_background_refresh():
@@ -1115,6 +1253,22 @@ def api_import_ssh_config():
     })
 
 
+@app.route("/api/history")
+def api_history():
+    alias = str(request.args.get("host") or "").strip()
+    range_key = str(request.args.get("range") or "1h").strip()
+    if not alias:
+        return jsonify({"error": "host is required"}), 400
+    if range_key not in HISTORY_RANGES:
+        range_key = "1h"
+    return jsonify({
+        "host": alias,
+        "range": range_key,
+        "retention_seconds": HISTORY_RETENTION_SECONDS,
+        "points": load_history(alias, range_key),
+    })
+
+
 @app.route("/api/refresh")
 def api_refresh():
     """Force a synchronous refresh and return fresh data."""
@@ -1151,11 +1305,13 @@ def api_stream():
 
         # Update cache with fresh streamed data
         sorted_results = _sort_results(results)
+        updated_at = time.time()
+        record_history(sorted_results, updated_at)
         with cache_lock:
             cache["data"] = sorted_results
-            cache["last_update"] = time.time()
+            cache["last_update"] = updated_at
 
-        yield f"data: {json.dumps({'done': True, 'updated_at': cache['last_update']})}\n\n"
+        yield f"data: {json.dumps({'done': True, 'updated_at': updated_at})}\n\n"
 
     return Response(generate(), mimetype="text/event-stream",
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

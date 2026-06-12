@@ -898,10 +898,178 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     min-width: 160px;
   }
   .watch-btn:hover .watch-tooltip { display: block; }
+  .history-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    color: #64748b;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 26px;
+    transition: all 0.2s;
+  }
+  .history-btn:hover {
+    color: #93c5fd;
+    background: rgba(96, 165, 250, 0.08);
+    border-color: rgba(96, 165, 250, 0.25);
+  }
+  .history-btn svg {
+    width: 16px;
+    height: 16px;
+  }
   .collapsed-info {
     font-size: 11px;
     color: #64748b;
     margin-top: 2px;
+  }
+
+  .history-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(2, 6, 23, 0.72);
+    backdrop-filter: blur(10px);
+    z-index: 4000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .history-overlay.open { display: flex; }
+  .history-modal {
+    width: min(920px, 96vw);
+    max-height: 88vh;
+    overflow: auto;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: var(--shadow-popover);
+    padding: 20px;
+  }
+  .history-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+  .history-title {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--text-strong);
+  }
+  .history-subtitle {
+    color: var(--text-subtle);
+    font-size: 12px;
+    margin-top: 4px;
+  }
+  .history-close {
+    border: 1px solid var(--border);
+    background: var(--surface-muted);
+    color: var(--text-muted);
+    border-radius: 10px;
+    width: 32px;
+    height: 30px;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+  }
+  .history-controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .history-range {
+    border: 1px solid var(--border);
+    background: var(--surface-muted);
+    color: var(--text-muted);
+    border-radius: 999px;
+    padding: 6px 11px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .history-range.active {
+    color: var(--text-strong);
+    border-color: var(--border-hover);
+    background: var(--hover-soft);
+  }
+  .history-chart {
+    border: 1px solid var(--border);
+    background: var(--surface-muted);
+    border-radius: 14px;
+    padding: 12px;
+    min-height: 310px;
+    position: relative;
+  }
+  .history-chart svg {
+    width: 100%;
+    height: 280px;
+    display: block;
+  }
+  .history-hover {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s;
+  }
+  .history-chart:hover .history-hover { opacity: 1; }
+  .history-tooltip {
+    position: absolute;
+    min-width: 170px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 12px;
+    padding: 9px 10px;
+    font-size: 12px;
+    box-shadow: var(--shadow-popover);
+    pointer-events: none;
+    display: none;
+    z-index: 2;
+  }
+  .history-tooltip-title {
+    color: var(--text-strong);
+    font-weight: 800;
+    margin-bottom: 6px;
+  }
+  .history-tooltip-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-top: 3px;
+  }
+  .history-tooltip-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-muted);
+  }
+  .history-legend {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+  .history-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .history-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+  }
+  .history-empty {
+    color: var(--text-muted);
+    padding: 60px 16px;
+    text-align: center;
   }
 
   /* Folded section divider */
@@ -1259,6 +1427,27 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   </aside>
 </div>
 
+<div class="history-overlay" id="history-overlay" onclick="closeHistoryOnBackdrop(event)">
+  <div class="history-modal" onclick="event.stopPropagation()">
+    <div class="history-head">
+      <div>
+        <div class="history-title" id="history-title">History</div>
+        <div class="history-subtitle" id="history-subtitle">Persistent samples are retained for 7 days.</div>
+      </div>
+      <button class="history-close" onclick="closeHistory()" aria-label="Close history">&times;</button>
+    </div>
+    <div class="history-controls">
+      <button class="history-range active" data-range="1h" onclick="setHistoryRange('1h')">1h</button>
+      <button class="history-range" data-range="6h" onclick="setHistoryRange('6h')">6h</button>
+      <button class="history-range" data-range="24h" onclick="setHistoryRange('24h')">24h</button>
+      <button class="history-range" data-range="7d" onclick="setHistoryRange('7d')">7d</button>
+    </div>
+    <div class="history-chart" id="history-chart">
+      <div class="history-empty">Select a host to view history.</div>
+    </div>
+  </div>
+</div>
+
 <div id="ui-tooltip"></div>
 <div class="summary-bar" id="summary-bar"></div>
 <div id="content">
@@ -1305,6 +1494,8 @@ let monitorLocal = true;
 let metricSettings = {gpu: true, cpu: true, memory: true, disk: true};
 let localDiskPath = '~';
 let serverSaveTimer = null;
+let historyHost = null;
+let historyRange = '1h';
 
 function setTheme(theme) {
   currentTheme = theme === 'light' ? 'light' : 'dark';
@@ -1334,7 +1525,10 @@ function closeSettingsOnBackdrop(event) {
 }
 
 document.addEventListener('keydown', event => {
-  if (event.key === 'Escape') toggleSettings(false);
+  if (event.key === 'Escape') {
+    toggleSettings(false);
+    closeHistory();
+  }
 });
 
 function syncSettingsControls() {
@@ -2029,6 +2223,232 @@ function compactSystemText(system) {
   return parts.join(' · ');
 }
 
+function historyButtonIcon() {
+  return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 19h16"></path>
+    <path d="M5 16l4-5 4 3 6-8"></path>
+  </svg>`;
+}
+
+function closeHistory() {
+  const overlay = document.getElementById('history-overlay');
+  if (overlay) overlay.classList.remove('open');
+}
+
+function closeHistoryOnBackdrop(event) {
+  if (event.target.id === 'history-overlay') closeHistory();
+}
+
+function setHistoryRange(range) {
+  historyRange = ['1h', '6h', '24h', '7d'].includes(range) ? range : '1h';
+  document.querySelectorAll('.history-range').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.range === historyRange);
+  });
+  if (historyHost) loadHistory(historyHost);
+}
+
+function openHistory(alias) {
+  historyHost = alias;
+  const overlay = document.getElementById('history-overlay');
+  const title = document.getElementById('history-title');
+  const subtitle = document.getElementById('history-subtitle');
+  const chart = document.getElementById('history-chart');
+  const host = lastData && lastData.hosts ? lastData.hosts.find(h => h.alias === alias) : null;
+  if (title) title.textContent = alias + ' History';
+  if (subtitle) subtitle.textContent = host ? `${host.user}@${host.hostname || alias}` : 'Persistent samples are retained for 7 days.';
+  if (chart) chart.innerHTML = '<div class="history-empty">Loading history...</div>';
+  if (overlay) overlay.classList.add('open');
+  setHistoryRange(historyRange);
+}
+
+async function loadHistory(alias) {
+  const chart = document.getElementById('history-chart');
+  if (chart) chart.innerHTML = '<div class="history-empty">Loading history...</div>';
+  try {
+    const resp = await fetch(`/api/history?host=${encodeURIComponent(alias)}&range=${encodeURIComponent(historyRange)}`);
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'History request failed');
+    renderHistory(data);
+  } catch (e) {
+    if (chart) chart.innerHTML = `<div class="history-empty">Failed to load history: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function formatHistoryTime(ts) {
+  const d = new Date(ts * 1000);
+  if (historyRange === '7d' || historyRange === '24h') {
+    return d.toLocaleString([], {month: 'short', day: 'numeric', hour: '2-digit'});
+  }
+  return d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+}
+
+function historySeries(points) {
+  const defs = [
+    {key: 'gpu_util_avg', label: 'GPU util', color: '#60a5fa'},
+    {key: 'gpu_memory_free_pct', label: 'GPU free', color: '#22c55e'},
+    {key: 'cpu_pct', label: 'CPU', color: '#f59e0b'},
+    {key: 'memory_pct', label: 'Memory', color: '#a78bfa'},
+    {key: 'disk_pct', label: 'Disk', color: '#f87171'},
+  ];
+  return defs.filter(def => points.some(p => Number.isFinite(Number(p[def.key]))));
+}
+
+function formatHistoryTooltipTime(ts) {
+  return new Date(ts * 1000).toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+function updateHistoryHover(event, hoverData) {
+  const svg = document.getElementById('history-svg');
+  const tooltip = document.getElementById('history-tooltip');
+  if (!svg || !tooltip || !hoverData || !hoverData.points.length) return;
+  const matrix = svg.getScreenCTM();
+  if (!matrix) return;
+  const point = svg.createSVGPoint();
+  point.x = event.clientX;
+  point.y = event.clientY;
+  const svgPoint = point.matrixTransform(matrix.inverse());
+  const svgX = Math.max(hoverData.left, Math.min(hoverData.width - hoverData.right, svgPoint.x));
+  let best = hoverData.points[0];
+  let bestDist = Infinity;
+  hoverData.points.forEach(point => {
+    const dist = Math.abs(hoverData.xFor(point.timestamp) - svgX);
+    if (dist < bestDist) {
+      best = point;
+      bestDist = dist;
+    }
+  });
+
+  const x = hoverData.xFor(best.timestamp);
+  const hoverGroup = document.getElementById('history-hover-group');
+  const hoverLine = document.getElementById('history-hover-line');
+  const hoverDots = document.getElementById('history-hover-dots');
+  if (hoverGroup) hoverGroup.style.opacity = '1';
+  if (hoverLine) {
+    hoverLine.setAttribute('x1', x);
+    hoverLine.setAttribute('x2', x);
+  }
+  if (hoverDots) {
+    hoverDots.innerHTML = hoverData.series.map(def => {
+      const value = Number(best[def.key]);
+      if (!Number.isFinite(value)) return '';
+      return `<circle cx="${x.toFixed(1)}" cy="${hoverData.yFor(value).toFixed(1)}" r="4.2" fill="${def.color}" stroke="var(--surface)" stroke-width="2"></circle>`;
+    }).join('');
+  }
+
+  const rows = hoverData.series.map(def => {
+    const value = Number(best[def.key]);
+    if (!Number.isFinite(value)) return '';
+    return `<div class="history-tooltip-row">
+      <span class="history-tooltip-label"><span class="history-dot" style="background:${def.color}"></span>${def.label}</span>
+      <strong>${value.toFixed(1)}%</strong>
+    </div>`;
+  }).join('');
+  tooltip.innerHTML = `<div class="history-tooltip-title">${formatHistoryTooltipTime(best.timestamp)}</div>${rows}`;
+  tooltip.style.display = 'block';
+
+  const chart = document.getElementById('history-chart');
+  const chartRect = chart.getBoundingClientRect();
+  const tooltipWidth = tooltip.offsetWidth || 180;
+  const tooltipHeight = tooltip.offsetHeight || 120;
+  let left = event.clientX - chartRect.left + 14;
+  let top = event.clientY - chartRect.top + 14;
+  if (left + tooltipWidth > chartRect.width - 8) left = event.clientX - chartRect.left - tooltipWidth - 14;
+  if (top + tooltipHeight > chartRect.height - 8) top = event.clientY - chartRect.top - tooltipHeight - 14;
+  tooltip.style.left = Math.max(8, left) + 'px';
+  tooltip.style.top = Math.max(8, top) + 'px';
+}
+
+function hideHistoryHover() {
+  const hoverGroup = document.getElementById('history-hover-group');
+  const tooltip = document.getElementById('history-tooltip');
+  if (hoverGroup) hoverGroup.style.opacity = '0';
+  if (tooltip) tooltip.style.display = 'none';
+}
+
+function renderHistory(data) {
+  const chart = document.getElementById('history-chart');
+  if (!chart) return;
+  const points = data.points || [];
+  if (!points.length) {
+    chart.innerHTML = '<div class="history-empty">No history yet. Data will appear after the next refresh samples are recorded.</div>';
+    return;
+  }
+  const series = historySeries(points);
+  if (!series.length) {
+    chart.innerHTML = '<div class="history-empty">History exists for this host, but no enabled numeric metrics were recorded.</div>';
+    return;
+  }
+
+  const width = 760, height = 280;
+  const left = 42, right = 18, top = 18, bottom = 34;
+  const plotW = width - left - right;
+  const plotH = height - top - bottom;
+  const times = points.map(p => Number(p.timestamp)).filter(Number.isFinite);
+  if (!times.length) {
+    chart.innerHTML = '<div class="history-empty">History data is missing timestamps.</div>';
+    return;
+  }
+  const minT = Math.min(...times);
+  const maxT = Math.max(...times);
+  const span = Math.max(maxT - minT, 1);
+  const xFor = ts => left + ((Number(ts) - minT) / span) * plotW;
+  const yFor = value => top + (100 - Math.max(0, Math.min(100, Number(value)))) / 100 * plotH;
+  const validPoints = points.filter(p => Number.isFinite(Number(p.timestamp)));
+  const grid = [0, 25, 50, 75, 100].map(v => {
+    const y = yFor(v);
+    return `<line x1="${left}" y1="${y}" x2="${width - right}" y2="${y}" stroke="var(--border)" stroke-width="1"></line>
+      <text x="${left - 10}" y="${y + 4}" text-anchor="end" fill="var(--text-subtle)" font-size="11">${v}</text>`;
+  }).join('');
+  const xLabels = [minT, minT + span / 2, maxT].map((ts, i) => {
+    const x = i === 0 ? left : i === 2 ? width - right : xFor(ts);
+    const anchor = i === 0 ? 'start' : i === 2 ? 'end' : 'middle';
+    return `<text x="${x}" y="${height - 10}" text-anchor="${anchor}" fill="var(--text-subtle)" font-size="11">${formatHistoryTime(ts)}</text>`;
+  }).join('');
+  const lines = series.map(def => {
+    const coords = points
+      .filter(p => Number.isFinite(Number(p.timestamp)) && Number.isFinite(Number(p[def.key])))
+      .map(p => `${xFor(p.timestamp).toFixed(1)},${yFor(p[def.key]).toFixed(1)}`);
+    if (coords.length === 1) {
+      const [x, y] = coords[0].split(',');
+      return `<circle cx="${x}" cy="${y}" r="3" fill="${def.color}"></circle>`;
+    }
+    return `<polyline points="${coords.join(' ')}" fill="none" stroke="${def.color}" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"></polyline>`;
+  }).join('');
+  const latest = points[points.length - 1] || {};
+  const legend = series.map(def => {
+    const value = Number.isFinite(Number(latest[def.key])) ? `${Number(latest[def.key]).toFixed(1)}%` : 'N/A';
+    return `<span class="history-legend-item"><span class="history-dot" style="background:${def.color}"></span>${def.label}: ${value}</span>`;
+  }).join('');
+
+  chart.innerHTML = `
+    <svg id="history-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="History trend chart">
+      <rect x="${left}" y="${top}" width="${plotW}" height="${plotH}" fill="transparent"></rect>
+      ${grid}
+      ${xLabels}
+      ${lines}
+      <g class="history-hover" id="history-hover-group">
+        <line id="history-hover-line" x1="${left}" y1="${top}" x2="${left}" y2="${height - bottom}" stroke="var(--text-subtle)" stroke-width="1.3" stroke-dasharray="4 4"></line>
+        <g id="history-hover-dots"></g>
+      </g>
+      <rect x="${left}" y="${top}" width="${plotW}" height="${plotH}" fill="transparent" style="cursor:crosshair" id="history-hit-area"></rect>
+    </svg>
+    <div class="history-tooltip" id="history-tooltip"></div>
+    <div class="history-legend">${legend}</div>
+  `;
+  const hitArea = document.getElementById('history-hit-area');
+  const hoverData = {points: validPoints, series, width, left, right, xFor, yFor};
+  if (hitArea) {
+    hitArea.onmousemove = event => updateHistoryHover(event, hoverData);
+    hitArea.onmouseleave = hideHistoryHover;
+  }
+}
+
 function renderSummary(hosts) {
   const online = hosts.filter(h => h.status === 'ok');
   const totalGPUs = online.reduce((s, h) => s + h.gpus.length, 0);
@@ -2213,6 +2633,7 @@ function renderHosts(hosts) {
             </div>
           </div>
           <div class="host-header-right">
+            <button class="history-btn" draggable="false" data-tip="View 7-day history trends" onclick="event.stopPropagation(); openHistory('${alias}')">${historyButtonIcon()}</button>
             <button class="watch-btn${watchedHosts.has(host.alias) ? ' watching' : ''}" draggable="false" onclick="event.stopPropagation(); toggleWatch('${alias}')">${watchedHosts.has(host.alias) ? '&#128276;' : '&#128277;'}${(() => {
               if (host.status !== 'ok') return '<span class="watch-tooltip">Watch this host</span>';
               const free = host.gpus.filter(g => _gpuAvailable(g));
