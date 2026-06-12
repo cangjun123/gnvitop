@@ -191,7 +191,7 @@ def _normalize_disk_path(disk_path):
     return value or DEFAULT_DISK_PATH
 
 
-def _normalize_host_config(host, default_disk_path=DEFAULT_DISK_PATH):
+def _normalize_host_config(host, default_disk_path=DEFAULT_DISK_PATH, default_metrics=None):
     """Return a sanitized host config dict with stable keys."""
     alias = str(host.get("alias") or "").strip()
     hostname = str(host.get("hostname") or alias).strip()
@@ -204,6 +204,7 @@ def _normalize_host_config(host, default_disk_path=DEFAULT_DISK_PATH):
     identity_file = host.get("identity_file") or None
     if identity_file:
         identity_file = os.path.expanduser(str(identity_file))
+    host_metrics = host.get("metrics")
     return {
         "alias": alias,
         "hostname": hostname,
@@ -215,14 +216,15 @@ def _normalize_host_config(host, default_disk_path=DEFAULT_DISK_PATH):
         "proxy_command": str(host.get("proxy_command") or "").strip() or None,
         "enabled": bool(host.get("enabled", True)),
         "disk_path": _normalize_disk_path(host.get("disk_path", default_disk_path)),
+        "metrics": _normalize_metrics(host_metrics if host_metrics is not None else default_metrics),
     }
 
 
-def _dedupe_hosts(hosts, default_disk_path=DEFAULT_DISK_PATH):
+def _dedupe_hosts(hosts, default_disk_path=DEFAULT_DISK_PATH, default_metrics=None):
     deduped = []
     seen = set()
     for host in hosts:
-        normalized = _normalize_host_config(host, default_disk_path)
+        normalized = _normalize_host_config(host, default_disk_path, default_metrics)
         alias = normalized["alias"]
         if not alias or alias in seen:
             continue
@@ -237,14 +239,15 @@ def _normalize_metrics(metrics):
 
 
 def _config_payload(hosts, monitor_local=True, metrics=None, local_disk_path=DEFAULT_DISK_PATH):
+    normalized_metrics = _normalize_metrics(metrics)
     return {
         "version": 1,
         "imported_from_ssh": True,
         "ssh_config_path": SSH_CONFIG_PATH,
         "monitor_local": bool(monitor_local),
-        "metrics": _normalize_metrics(metrics),
+        "metrics": normalized_metrics,
         "local_disk_path": _normalize_disk_path(local_disk_path),
-        "hosts": _dedupe_hosts(hosts),
+        "hosts": _dedupe_hosts(hosts, default_metrics=normalized_metrics),
     }
 
 
@@ -252,6 +255,21 @@ def save_server_config(hosts, monitor_local=True, metrics=None, local_disk_path=
     os.makedirs(os.path.dirname(SERVER_CONFIG_PATH), exist_ok=True)
     with open(SERVER_CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(_config_payload(hosts, monitor_local, metrics, local_disk_path), f, indent=2)
+
+
+def save_config_payload(payload):
+    """Persist an imported config payload after normalization."""
+    if not isinstance(payload, dict):
+        raise ValueError("config payload must be an object")
+    hosts = payload.get("hosts", [])
+    if not isinstance(hosts, list):
+        raise ValueError("hosts must be a list")
+    monitor_local = bool(payload.get("monitor_local", True))
+    metrics = _normalize_metrics(payload.get("metrics"))
+    local_disk_path = _normalize_disk_path(
+        payload.get("local_disk_path", payload.get("disk_path", DEFAULT_DISK_PATH))
+    )
+    save_server_config(hosts, monitor_local, metrics, local_disk_path)
 
 
 def load_config_payload():
@@ -279,14 +297,19 @@ def load_config_payload():
         data = {}
     legacy_disk_path = data.get("disk_path", DEFAULT_DISK_PATH)
     local_disk_path = data.get("local_disk_path", legacy_disk_path)
+    metrics = _normalize_metrics(data.get("metrics"))
     return {
         "version": data.get("version", 1),
         "imported_from_ssh": data.get("imported_from_ssh", True),
         "ssh_config_path": data.get("ssh_config_path", SSH_CONFIG_PATH),
         "monitor_local": bool(data.get("monitor_local", True)),
-        "metrics": _normalize_metrics(data.get("metrics")),
+        "metrics": metrics,
         "local_disk_path": _normalize_disk_path(local_disk_path),
-        "hosts": _dedupe_hosts(data.get("hosts", []), default_disk_path=legacy_disk_path),
+        "hosts": _dedupe_hosts(
+            data.get("hosts", []),
+            default_disk_path=legacy_disk_path,
+            default_metrics=metrics,
+        ),
     }
 
 
@@ -315,11 +338,11 @@ def _host_endpoint_key(host):
 
 def import_ssh_hosts(replace=False):
     """Import hosts from SSH config into managed config."""
-    imported = _dedupe_hosts(parse_ssh_config(SSH_CONFIG_PATH))
     payload = load_config_payload()
     monitor_local = payload["monitor_local"]
     metrics = payload["metrics"]
     local_disk_path = payload["local_disk_path"]
+    imported = _dedupe_hosts(parse_ssh_config(SSH_CONFIG_PATH), default_metrics=metrics)
     if replace:
         save_server_config(imported, monitor_local, metrics, local_disk_path)
         return imported
@@ -662,7 +685,7 @@ def query_gpu(host_info, hosts_by_alias=None, metrics=None):
     hostname = host_info["hostname"] or alias
     user = host_info["user"]
     port = host_info["port"]
-    metrics = _normalize_metrics(metrics)
+    metrics = _normalize_metrics(host_info.get("metrics", metrics))
     disk_path = host_info.get("disk_path", DEFAULT_DISK_PATH)
 
     result = {
@@ -903,6 +926,7 @@ def discover_gadi_nodes(hosts_by_alias):
                 "password": info.get("password"),
                 "proxy_jump": alias,
                 "disk_path": info.get("disk_path", DEFAULT_DISK_PATH),
+                "metrics": info.get("metrics", DEFAULT_METRICS),
             })
 
     return discovered
@@ -1017,6 +1041,11 @@ def api_save_config_hosts():
     if not isinstance(hosts, list):
         return jsonify({"error": "hosts must be a list"}), 400
 
+    monitor_local = bool(payload.get("monitor_local", True))
+    metrics = _normalize_metrics(payload.get("metrics"))
+    local_disk_path = _normalize_disk_path(
+        payload.get("local_disk_path", payload.get("disk_path", DEFAULT_DISK_PATH))
+    )
     existing_passwords = {
         h["alias"]: h.get("password")
         for h in load_server_config()
@@ -1029,13 +1058,8 @@ def api_save_config_hosts():
         merged = dict(host)
         if merged.get("password") == "__KEEP__":
             merged["password"] = existing_passwords.get(str(merged.get("alias") or "").strip())
-        normalized.append(_normalize_host_config(merged))
+        normalized.append(_normalize_host_config(merged, default_metrics=metrics))
 
-    monitor_local = bool(payload.get("monitor_local", True))
-    metrics = _normalize_metrics(payload.get("metrics"))
-    local_disk_path = _normalize_disk_path(
-        payload.get("local_disk_path", payload.get("disk_path", DEFAULT_DISK_PATH))
-    )
     save_server_config(normalized, monitor_local, metrics, local_disk_path)
     _invalidate_cache()
     return jsonify({
@@ -1043,6 +1067,35 @@ def api_save_config_hosts():
         "monitor_local": get_monitor_local(),
         "metrics": get_metric_config(),
         "local_disk_path": get_local_disk_path_config(),
+        "config_path": SERVER_CONFIG_PATH,
+    })
+
+
+@app.route("/api/config/export", methods=["GET"])
+def api_export_config():
+    payload = load_config_payload()
+    body = json.dumps(payload, indent=2)
+    return Response(
+        body,
+        mimetype="application/json",
+        headers={"Content-Disposition": "attachment; filename=gnvitop-config.json"},
+    )
+
+
+@app.route("/api/config/import", methods=["POST"])
+def api_import_config():
+    payload = request.get_json(silent=True)
+    try:
+        save_config_payload(payload)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    _invalidate_cache()
+    saved = load_config_payload()
+    return jsonify({
+        "hosts": [public_host_config(h) for h in saved["hosts"]],
+        "monitor_local": saved["monitor_local"],
+        "metrics": saved["metrics"],
+        "local_disk_path": saved["local_disk_path"],
         "config_path": SERVER_CONFIG_PATH,
     })
 

@@ -757,6 +757,16 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     letter-spacing: 0.4px;
     text-transform: uppercase;
   }
+  .server-metrics {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .server-metrics .toggle-switch {
+    font-size: 11px;
+    min-height: 26px;
+  }
   .server-input {
     width: 100%;
     border: 1px solid #334155;
@@ -786,6 +796,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     width: 170px;
     max-width: 56%;
   }
+  .hidden-file-input { display: none; }
   .server-remove {
     border: none;
     background: transparent;
@@ -1190,7 +1201,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     </section>
 
     <section class="settings-section">
-      <div class="settings-section-title">Metrics</div>
+      <div class="settings-section-title">Default Metrics</div>
       <div class="settings-row">
         <span>GPU</span>
         <label class="toggle-switch">
@@ -1227,7 +1238,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
         <span>Local disk path</span>
         <input class="server-input settings-path-input" id="settings-local-disk-path" value="~" placeholder="~, /, /data" oninput="setLocalDiskPath(this.value)" onblur="syncSettingsControls()" data-tip="Monitor the filesystem containing this path on localhost">
       </div>
-      <div class="settings-note">Remote servers have separate disk paths in each server card. Use a path on the target partition, for example <code>~</code>, <code>/</code>, or <code>/data</code>.</div>
+      <div class="settings-note">These defaults apply to localhost and newly added/imported servers. Remote servers can override metrics and disk paths in each server card.</div>
     </section>
 
     <section class="settings-section">
@@ -1235,8 +1246,11 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
       <div class="server-toolbar">
         <button class="settings-action" onclick="addServerConfig()">Add Server</button>
         <button class="settings-action" onclick="importSshConfig(false)">Import SSH Config</button>
+        <button class="settings-action" onclick="exportServerConfig()">Export Config</button>
+        <button class="settings-action" onclick="selectConfigImportFile()">Import Config</button>
       </div>
-      <div class="settings-note">Servers are stored separately from SSH config. Changes are saved automatically. Passwords are saved locally in this gnvitop config file.</div>
+      <input class="hidden-file-input" id="config-import-file" type="file" accept="application/json,.json" onchange="importConfigFile(this.files[0]); this.value='';">
+      <div class="settings-note">Servers are stored separately from SSH config. Changes are saved automatically. Passwords are saved locally in this gnvitop config file, and exported config files include them.</div>
       <div class="server-save-status" id="server-save-status"></div>
       <div class="server-list" id="server-list">
         <div class="server-empty">Loading server config...</div>
@@ -1419,6 +1433,10 @@ function escapeHtml(value) {
   }[c]));
 }
 
+function normalizeMetricConfig(metrics) {
+  return Object.assign({gpu: true, cpu: true, memory: true, disk: true}, metrics || {});
+}
+
 async function loadServerConfigs() {
   const list = document.getElementById('server-list');
   try {
@@ -1426,13 +1444,38 @@ async function loadServerConfigs() {
     const data = await resp.json();
     serverConfigs = data.hosts || [];
     monitorLocal = data.monitor_local !== false;
-    metricSettings = Object.assign({gpu: true, cpu: true, memory: true, disk: true}, data.metrics || {});
+    metricSettings = normalizeMetricConfig(data.metrics);
     localDiskPath = data.local_disk_path || data.disk_path || '~';
     syncSettingsControls();
     renderServerConfigs();
   } catch (e) {
     if (list) list.innerHTML = '<div class="server-empty">Failed to load server config.</div>';
   }
+}
+
+function renderServerMetricToggle(index, metrics, key, label) {
+  return `
+    <label class="toggle-switch">
+      <input type="checkbox" ${metrics[key] !== false ? 'checked' : ''} onchange="updateServerMetric(${index}, '${key}', this.checked)">
+      <span class="toggle-knob"></span>
+      <span class="toggle-label">${label}</span>
+    </label>
+  `;
+}
+
+function renderServerMetricToggles(index, host) {
+  const metrics = normalizeMetricConfig(host.metrics || metricSettings);
+  return `
+    <div class="server-field full">
+      <label>Metrics</label>
+      <div class="server-metrics">
+        ${renderServerMetricToggle(index, metrics, 'gpu', 'GPU')}
+        ${renderServerMetricToggle(index, metrics, 'cpu', 'CPU')}
+        ${renderServerMetricToggle(index, metrics, 'memory', 'Memory')}
+        ${renderServerMetricToggle(index, metrics, 'disk', 'Disk')}
+      </div>
+    </div>
+  `;
 }
 
 function renderServerConfigs() {
@@ -1473,6 +1516,7 @@ function renderServerConfigs() {
           <label>Disk Path</label>
           <input class="server-input" value="${escapeHtml(host.disk_path || '~')}" placeholder="~, /, /data" oninput="updateServerField(${idx}, 'disk_path', this.value)">
         </div>
+        ${renderServerMetricToggles(idx, host)}
         <div class="server-field full">
           <label>Identity File</label>
           <input class="server-input" value="${escapeHtml(host.identity_file)}" placeholder="~/.ssh/id_rsa" oninput="updateServerField(${idx}, 'identity_file', this.value)">
@@ -1500,6 +1544,15 @@ function updateServerField(index, field, value) {
   scheduleServerConfigSave();
 }
 
+function updateServerMetric(index, metric, enabled) {
+  if (!serverConfigs[index]) return;
+  serverConfigs[index].metrics = normalizeMetricConfig(serverConfigs[index].metrics || metricSettings);
+  serverConfigs[index].metrics[metric] = !!enabled;
+  const status = document.getElementById('server-save-status');
+  if (status) status.textContent = 'Saving server metric setting...';
+  scheduleServerConfigSave(0);
+}
+
 function addServerConfig() {
   const nextIndex = serverConfigs.length + 1;
   serverConfigs.push({
@@ -1513,6 +1566,7 @@ function addServerConfig() {
     proxy_command: '',
     enabled: true,
     disk_path: '~',
+    metrics: normalizeMetricConfig(metricSettings),
   });
   renderServerConfigs();
   const status = document.getElementById('server-save-status');
@@ -1543,6 +1597,7 @@ function serializeServerConfigs() {
       proxy_command: host.proxy_command || '',
       enabled: host.enabled !== false,
       disk_path: host.disk_path || '~',
+      metrics: normalizeMetricConfig(host.metrics || metricSettings),
     };
     out.password = host.password ? host.password : (host.has_password ? '__KEEP__' : '');
     return out;
@@ -1557,6 +1612,10 @@ function scheduleServerConfigSave(delay = 700) {
 }
 
 async function saveServerConfigs() {
+  if (serverSaveTimer) {
+    clearTimeout(serverSaveTimer);
+    serverSaveTimer = null;
+  }
   const status = document.getElementById('server-save-status');
   if (status) status.textContent = 'Saving...';
   try {
@@ -1569,14 +1628,78 @@ async function saveServerConfigs() {
     const data = await resp.json();
     serverConfigs = data.hosts || [];
     monitorLocal = data.monitor_local !== false;
-    metricSettings = Object.assign({gpu: true, cpu: true, memory: true, disk: true}, data.metrics || {});
+    metricSettings = normalizeMetricConfig(data.metrics);
     localDiskPath = data.local_disk_path || data.disk_path || '~';
     renderServerConfigs();
     syncSettingsControls();
     if (status) status.textContent = 'Saved. Refreshing monitored hosts...';
     refresh();
+    return true;
   } catch (e) {
     if (status) status.textContent = 'Save failed: ' + e.message;
+    return false;
+  }
+}
+
+function selectConfigImportFile() {
+  const input = document.getElementById('config-import-file');
+  if (input) input.click();
+}
+
+async function exportServerConfig() {
+  const status = document.getElementById('server-save-status');
+  if (status) status.textContent = 'Preparing config export...';
+  try {
+    if (serverSaveTimer) {
+      const saved = await saveServerConfigs();
+      if (!saved) throw new Error('Save failed before export');
+    }
+    const resp = await fetch('/api/config/export');
+    if (!resp.ok) throw new Error('Export failed');
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const date = new Date().toISOString().slice(0, 10);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `gnvitop-config-${date}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    if (status) status.textContent = 'Config exported. Keep it private if it contains passwords.';
+  } catch (e) {
+    if (status) status.textContent = 'Export failed: ' + e.message;
+  }
+}
+
+async function importConfigFile(file) {
+  if (!file) return;
+  if (!confirm('Import this config file and replace current server/settings config?')) return;
+  if (serverSaveTimer) {
+    clearTimeout(serverSaveTimer);
+    serverSaveTimer = null;
+  }
+  const status = document.getElementById('server-save-status');
+  if (status) status.textContent = 'Importing config file...';
+  try {
+    const payload = JSON.parse(await file.text());
+    const resp = await fetch('/api/config/import', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.error || 'Import failed');
+    serverConfigs = data.hosts || [];
+    monitorLocal = data.monitor_local !== false;
+    metricSettings = normalizeMetricConfig(data.metrics);
+    localDiskPath = data.local_disk_path || data.disk_path || '~';
+    renderServerConfigs();
+    syncSettingsControls();
+    if (status) status.textContent = 'Config imported. Refreshing monitored hosts...';
+    refresh();
+  } catch (e) {
+    if (status) status.textContent = 'Import failed: ' + e.message;
   }
 }
 
@@ -1597,7 +1720,7 @@ async function importSshConfig(replace) {
     const data = await resp.json();
     serverConfigs = data.hosts || [];
     monitorLocal = data.monitor_local !== false;
-    metricSettings = Object.assign({gpu: true, cpu: true, memory: true, disk: true}, data.metrics || {});
+    metricSettings = normalizeMetricConfig(data.metrics);
     localDiskPath = data.local_disk_path || data.disk_path || '~';
     renderServerConfigs();
     syncSettingsControls();
