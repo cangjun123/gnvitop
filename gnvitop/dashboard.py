@@ -26,9 +26,9 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     --border-hover: #475569;
     --text: #e2e8f0;
     --text-strong: #f1f5f9;
-    --text-muted: #94a3b8;
-    --text-subtle: #64748b;
-    --icon-muted: #475569;
+    --text-muted: #cbd5e1;
+    --text-subtle: #94a3b8;
+    --icon-muted: #94a3b8;
     --hover-soft: rgba(255,255,255,0.03);
     --shadow-card: 0 8px 24px rgba(0,0,0,0.3);
     --shadow-tooltip: 0 4px 16px rgba(0,0,0,0.5);
@@ -55,9 +55,9 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     --border-hover: #aebccd;
     --text: #334155;
     --text-strong: #0f172a;
-    --text-muted: #64748b;
-    --text-subtle: #738095;
-    --icon-muted: #94a3b8;
+    --text-muted: #475569;
+    --text-subtle: #526173;
+    --icon-muted: #64748b;
     --hover-soft: rgba(15,23,42,0.04);
     --shadow-card: 0 10px 26px rgba(15,23,42,0.10);
     --shadow-tooltip: 0 10px 26px rgba(15,23,42,0.16);
@@ -115,7 +115,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 
   .status-text {
     font-size: 13px;
-    color: #94a3b8;
+    color: var(--text-muted);
   }
 
   .header-divider {
@@ -154,11 +154,11 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     cursor: pointer;
     font-size: 15px;
     padding: 0 4px;
-    color: #475569;
+    color: var(--icon-muted);
     transition: color 0.2s, transform 0.2s;
     line-height: 1;
   }
-  .global-watch-btn:hover { color: #94a3b8; transform: scale(1.1); }
+  .global-watch-btn:hover { color: var(--text-muted); transform: scale(1.1); }
   .global-watch-btn.watching { color: #facc15; }
 
   /* Drag-and-drop */
@@ -166,13 +166,13 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .host-card.drag-over { outline: 2px dashed #60a5fa; outline-offset: 2px; }
   .drag-handle {
     cursor: grab;
-    color: #475569;
+    color: var(--icon-muted);
     font-size: 14px;
     padding: 2px 4px;
     user-select: none;
     line-height: 1;
   }
-  .drag-handle:hover { color: #94a3b8; }
+  .drag-handle:hover { color: var(--text-muted); }
   .drag-handle:active { cursor: grabbing; }
 
   .summary-bar {
@@ -193,7 +193,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 
   .summary-card .label {
     font-size: 12px;
-    color: #94a3b8;
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 4px;
@@ -248,7 +248,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 
   .host-info {
     font-size: 12px;
-    color: #64748b;
+    color: var(--text-subtle);
   }
 
   .status-badge {
@@ -305,7 +305,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     padding: 9px;
   }
   .system-metric-name {
-    color: #64748b;
+    color: var(--text-subtle);
     font-size: 10px;
     font-weight: 700;
     text-transform: uppercase;
@@ -318,7 +318,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     font-weight: 700;
   }
   .system-metric-sub {
-    color: #64748b;
+    color: var(--text-subtle);
     font-size: 11px;
     margin-top: 3px;
   }
@@ -354,7 +354,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     display: flex;
     justify-content: space-between;
     font-size: 12px;
-    color: #94a3b8;
+    color: var(--text-muted);
     margin-bottom: 4px;
   }
 
@@ -397,14 +397,14 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 
   .stat .stat-label {
     font-size: 10px;
-    color: #64748b;
+    color: var(--text-subtle);
     margin-top: 2px;
   }
 
   .loading {
     text-align: center;
     padding: 80px 20px;
-    color: #94a3b8;
+    color: var(--text-muted);
     font-size: 16px;
   }
 
@@ -428,7 +428,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     gap: 7px;
     cursor: pointer;
     font-size: 13px;
-    color: #94a3b8;
+    color: var(--text-muted);
     user-select: none;
     transition: color 0.2s;
   }
@@ -491,7 +491,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     padding: 2px 8px;
     border-radius: 4px;
     background: #334155;
-    color: #94a3b8;
+    color: var(--text-muted);
     font-family: monospace;
   }
 
@@ -503,7 +503,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   }
 
   .user-mem {
-    color: #64748b;
+    color: var(--text-subtle);
     font-size: 10px;
     margin-left: 2px;
   }
@@ -519,13 +519,13 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     padding: 5px 11px;
     border: none;
     background: transparent;
-    color: #64748b;
+    color: var(--text-subtle);
     cursor: pointer;
     transition: all 0.2s;
     font-size: 13px;
     white-space: nowrap;
   }
-  .mode-toggle button:hover { color: #94a3b8; background: #1e293b; }
+  .mode-toggle button:hover { color: var(--text-muted); background: #1e293b; }
   .mode-toggle button.active { background: #334155; color: #e2e8f0; }
 
   .theme-toggle {
@@ -539,13 +539,13 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     padding: 5px 11px;
     border: none;
     background: transparent;
-    color: #64748b;
+    color: var(--text-subtle);
     cursor: pointer;
     transition: all 0.2s;
     font-size: 13px;
     white-space: nowrap;
   }
-  .theme-toggle button:hover { color: #94a3b8; background: #1e293b; }
+  .theme-toggle button:hover { color: var(--text-muted); background: #1e293b; }
   .theme-toggle button.active { background: #334155; color: #e2e8f0; }
 
   /* Initial load animation only */
@@ -562,7 +562,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     background: #0f172a;
     border: 1px solid #334155;
     border-radius: 8px;
-    color: #94a3b8;
+    color: var(--text-muted);
     font-size: 13px;
     padding: 5px 8px;
     cursor: pointer;
@@ -636,7 +636,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   }
   .settings-subtitle {
     font-size: 12px;
-    color: #94a3b8;
+    color: var(--text-muted);
     margin-top: 4px;
   }
   .settings-close {
@@ -644,7 +644,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     height: 30px;
     border: 1px solid #334155;
     background: #0f172a;
-    color: #94a3b8;
+    color: var(--text-muted);
     border-radius: 8px;
     cursor: pointer;
     font-size: 20px;
@@ -661,7 +661,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .settings-section-title {
     font-size: 11px;
     font-weight: 700;
-    color: #64748b;
+    color: var(--text-subtle);
     letter-spacing: 0.7px;
     text-transform: uppercase;
     margin-bottom: 12px;
@@ -677,7 +677,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   }
   .settings-row + .settings-row { margin-top: 12px; }
   .settings-note {
-    color: #64748b;
+    color: var(--text-subtle);
     font-size: 12px;
     line-height: 1.45;
     margin-top: 8px;
@@ -751,7 +751,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   }
   .server-field.full { grid-column: 1 / -1; }
   .server-field label {
-    color: #64748b;
+    color: var(--text-subtle);
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.4px;
@@ -786,7 +786,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     border-color: #cbd5e1;
   }
   html.theme-light .server-input::placeholder {
-    color: #94a3b8;
+    color: var(--text-subtle);
   }
   html.theme-light .server-input:focus {
     background: #f1f5f9;
@@ -806,7 +806,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   }
   .server-remove:hover { text-decoration: underline; }
   .server-empty {
-    color: #64748b;
+    color: var(--text-subtle);
     font-size: 12px;
     padding: 12px;
     border: 1px dashed #334155;
@@ -814,7 +814,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   }
   .server-save-status {
     min-height: 16px;
-    color: #64748b;
+    color: var(--text-subtle);
     font-size: 12px;
     margin-top: 10px;
   }
@@ -847,7 +847,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   }
   .collapse-arrow {
     font-size: 11px;
-    color: #475569;
+    color: var(--icon-muted);
     transition: transform 0.2s;
     display: inline-block;
   }
@@ -866,12 +866,12 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     cursor: pointer;
     font-size: 15px;
     padding: 2px 4px;
-    color: #475569;
+    color: var(--icon-muted);
     transition: color 0.2s;
     line-height: 1;
     position: relative;
   }
-  .watch-btn:hover { color: #94a3b8; }
+  .watch-btn:hover { color: var(--text-muted); }
   .watch-btn.watching { color: #facc15; }
   @keyframes watchPop {
     0%   { transform: scale(1); }
@@ -902,7 +902,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     background: transparent;
     border: 1px solid transparent;
     border-radius: 8px;
-    color: #64748b;
+    color: var(--icon-muted);
     cursor: pointer;
     display: inline-flex;
     align-items: center;
@@ -922,7 +922,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   }
   .collapsed-info {
     font-size: 11px;
-    color: #64748b;
+    color: var(--text-subtle);
     margin-top: 2px;
   }
 
@@ -1089,7 +1089,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .folded-label {
     font-size: 11px;
     font-weight: 600;
-    color: #475569;
+    color: var(--text-subtle);
     text-transform: uppercase;
     letter-spacing: 0.8px;
     white-space: nowrap;
