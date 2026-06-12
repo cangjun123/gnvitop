@@ -12,7 +12,7 @@ import time
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from flask import Flask, jsonify, Response
+from flask import Flask, jsonify, request, Response
 import paramiko
 
 from . import __version__
@@ -21,6 +21,7 @@ from .dashboard import DASHBOARD_HTML
 app = Flask(__name__)
 
 SSH_CONFIG_PATH = os.path.expanduser("~/.ssh/config")
+SERVER_CONFIG_PATH = os.path.expanduser("~/.gnvitop/servers.json")
 SSH_TIMEOUT = 45
 
 # ── nvidia-smi queries ────────────────────────────────────────────────────────
@@ -139,6 +140,103 @@ def parse_ssh_config(path):
                     current["proxy_command"] = value
 
     return hosts
+
+
+def _normalize_host_config(host):
+    """Return a sanitized host config dict with stable keys."""
+    alias = str(host.get("alias") or "").strip()
+    hostname = str(host.get("hostname") or alias).strip()
+    if not alias:
+        alias = hostname
+    try:
+        port = int(host.get("port") or 22)
+    except (TypeError, ValueError):
+        port = 22
+    identity_file = host.get("identity_file") or None
+    if identity_file:
+        identity_file = os.path.expanduser(str(identity_file))
+    return {
+        "alias": alias,
+        "hostname": hostname,
+        "user": str(host.get("user") or "").strip() or None,
+        "port": port,
+        "identity_file": identity_file,
+        "password": host.get("password") or None,
+        "proxy_jump": str(host.get("proxy_jump") or "").strip() or None,
+        "proxy_command": str(host.get("proxy_command") or "").strip() or None,
+        "enabled": bool(host.get("enabled", True)),
+    }
+
+
+def _dedupe_hosts(hosts):
+    deduped = []
+    seen = set()
+    for host in hosts:
+        normalized = _normalize_host_config(host)
+        alias = normalized["alias"]
+        if not alias or alias in seen:
+            continue
+        seen.add(alias)
+        deduped.append(normalized)
+    return deduped
+
+
+def _config_payload(hosts):
+    return {
+        "version": 1,
+        "imported_from_ssh": True,
+        "ssh_config_path": SSH_CONFIG_PATH,
+        "hosts": _dedupe_hosts(hosts),
+    }
+
+
+def save_server_config(hosts):
+    os.makedirs(os.path.dirname(SERVER_CONFIG_PATH), exist_ok=True)
+    with open(SERVER_CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(_config_payload(hosts), f, indent=2)
+
+
+def load_server_config():
+    """Load managed server config, importing ~/.ssh/config on first run."""
+    if not os.path.exists(SERVER_CONFIG_PATH):
+        hosts = parse_ssh_config(SSH_CONFIG_PATH)
+        save_server_config(hosts)
+        return _dedupe_hosts(hosts)
+
+    try:
+        with open(SERVER_CONFIG_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return []
+    return _dedupe_hosts(data.get("hosts", []))
+
+
+def import_ssh_hosts(replace=False):
+    """Import hosts from SSH config into managed config."""
+    imported = _dedupe_hosts(parse_ssh_config(SSH_CONFIG_PATH))
+    if replace:
+        save_server_config(imported)
+        return imported
+
+    existing = load_server_config()
+    aliases = {h["alias"] for h in existing}
+    merged = existing + [h for h in imported if h["alias"] not in aliases]
+    save_server_config(merged)
+    return merged
+
+
+def public_host_config(host):
+    """Expose config to UI. Password is intentionally not returned."""
+    data = dict(_normalize_host_config(host))
+    data["has_password"] = bool(data.get("password"))
+    data.pop("password", None)
+    return data
+
+
+def _invalidate_cache():
+    with cache_lock:
+        cache["data"] = []
+        cache["last_update"] = 0
 
 
 def _parse_combined_output(output):
@@ -313,7 +411,7 @@ def _attach_tpu_processes(gpus, proc_output):
         gpus[0]["processes"].append(proc)
 
 
-def _make_ssh_client(hostname, port, user, identity_file, sock=None):
+def _make_ssh_client(hostname, port, user, identity_file, password=None, sock=None):
     """Create and connect a paramiko SSHClient."""
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -329,6 +427,10 @@ def _make_ssh_client(hostname, port, user, identity_file, sock=None):
     }
     if identity_file:
         kwargs["key_filename"] = identity_file
+    if password:
+        kwargs["password"] = password
+        kwargs["look_for_keys"] = False
+        kwargs["allow_agent"] = False
     if sock is not None:
         kwargs["sock"] = sock
     client.connect(**kwargs)
@@ -373,7 +475,8 @@ def query_gpu(host_info, hosts_by_alias=None):
             jump_port = jump_info.get("port", 22)
             jump_user = jump_info.get("user")
             jump_key = jump_info.get("identity_file")
-            jump_client = _make_ssh_client(jump_host, jump_port, jump_user, jump_key)
+            jump_password = jump_info.get("password")
+            jump_client = _make_ssh_client(jump_host, jump_port, jump_user, jump_key, jump_password)
             sock = jump_client.get_transport().open_channel(
                 "direct-tcpip", (hostname, port), ("", 0)
             )
@@ -382,7 +485,10 @@ def query_gpu(host_info, hosts_by_alias=None):
             cmd = proxy_cmd.replace("%h", hostname).replace("%p", str(port))
             sock = paramiko.ProxyCommand(cmd)
 
-        client = _make_ssh_client(hostname, port, user, host_info.get("identity_file"), sock=sock)
+        client = _make_ssh_client(
+            hostname, port, user, host_info.get("identity_file"),
+            host_info.get("password"), sock=sock,
+        )
 
         # Single exec_command for both GPU stats and process info
         # Wrap in bash -c to avoid issues with non-bash login shells (e.g. fish)
@@ -544,6 +650,7 @@ def discover_gadi_nodes(hosts_by_alias):
             client = _make_ssh_client(
                 hostname, info.get("port", 22),
                 info.get("user"), info.get("identity_file"),
+                info.get("password"),
             )
             _, stdout, _ = client.exec_command(
                 "qstat -u $(whoami) -n 2>/dev/null | grep -oE 'gadi-gpu-[a-z0-9-]+' | sort -u",
@@ -562,6 +669,7 @@ def discover_gadi_nodes(hosts_by_alias):
                 "user": info.get("user"),
                 "port": 22,
                 "identity_file": info.get("identity_file"),
+                "password": info.get("password"),
                 "proxy_jump": alias,
             })
 
@@ -570,7 +678,7 @@ def discover_gadi_nodes(hosts_by_alias):
 
 def fetch_all_gpu_info():
     """Query all hosts (local + remote) concurrently and return sorted results."""
-    hosts = parse_ssh_config(SSH_CONFIG_PATH)
+    hosts = [h for h in load_server_config() if h.get("enabled", True)]
     hosts_by_alias = {h["alias"]: h for h in hosts}
 
     # Discover dynamically allocated Gadi compute nodes
@@ -650,6 +758,57 @@ def api_gpus():
     return jsonify({"hosts": data, "updated_at": last_update})
 
 
+@app.route("/api/config/hosts", methods=["GET"])
+def api_config_hosts():
+    hosts = [public_host_config(h) for h in load_server_config()]
+    return jsonify({
+        "hosts": hosts,
+        "config_path": SERVER_CONFIG_PATH,
+        "ssh_config_path": SSH_CONFIG_PATH,
+    })
+
+
+@app.route("/api/config/hosts", methods=["POST"])
+def api_save_config_hosts():
+    payload = request.get_json(silent=True) or {}
+    hosts = payload.get("hosts", [])
+    if not isinstance(hosts, list):
+        return jsonify({"error": "hosts must be a list"}), 400
+
+    existing_passwords = {
+        h["alias"]: h.get("password")
+        for h in load_server_config()
+        if h.get("password")
+    }
+    normalized = []
+    for host in hosts:
+        if not isinstance(host, dict):
+            continue
+        merged = dict(host)
+        if merged.get("password") == "__KEEP__":
+            merged["password"] = existing_passwords.get(str(merged.get("alias") or "").strip())
+        normalized.append(_normalize_host_config(merged))
+
+    save_server_config(normalized)
+    _invalidate_cache()
+    return jsonify({
+        "hosts": [public_host_config(h) for h in load_server_config()],
+        "config_path": SERVER_CONFIG_PATH,
+    })
+
+
+@app.route("/api/config/import-ssh", methods=["POST"])
+def api_import_ssh_config():
+    payload = request.get_json(silent=True) or {}
+    hosts = import_ssh_hosts(replace=bool(payload.get("replace")))
+    _invalidate_cache()
+    return jsonify({
+        "hosts": [public_host_config(h) for h in hosts],
+        "config_path": SERVER_CONFIG_PATH,
+        "ssh_config_path": SSH_CONFIG_PATH,
+    })
+
+
 @app.route("/api/refresh")
 def api_refresh():
     """Force a synchronous refresh and return fresh data."""
@@ -663,7 +822,7 @@ def api_refresh():
 def api_stream():
     """SSE endpoint: streams each host result as it arrives, then a 'done' event."""
     def generate():
-        hosts = parse_ssh_config(SSH_CONFIG_PATH)
+        hosts = [h for h in load_server_config() if h.get("enabled", True)]
         hosts_by_alias = {h["alias"]: h for h in hosts}
         results = []
 

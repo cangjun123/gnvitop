@@ -66,7 +66,7 @@ def main():
     parser.add_argument(
         "--ssh-config",
         default=None,
-        help="Path to SSH config file (default: ~/.ssh/config)",
+        help="Path to SSH config used for initial/imported server entries (default: ~/.ssh/config)",
     )
     parser.add_argument(
         "--history",

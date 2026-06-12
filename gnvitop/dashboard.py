@@ -648,6 +648,121 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     width: 34px;
     height: 30px;
   }
+  .server-toolbar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .settings-action {
+    padding: 6px 10px;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    background: #0f172a;
+    color: #cbd5e1;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+  }
+  .settings-action:hover {
+    border-color: #475569;
+    color: #f1f5f9;
+  }
+  html.theme-light .settings-action {
+    color: #1e293b;
+    background: #f8fafc;
+    border-color: #cbd5e1;
+  }
+  html.theme-light .settings-action:hover {
+    color: #0f172a;
+    background: #f1f5f9;
+    border-color: #94a3b8;
+  }
+  .server-list {
+    display: grid;
+    gap: 10px;
+  }
+  .server-card {
+    border: 1px solid #334155;
+    background: #0f172a;
+    border-radius: 10px;
+    padding: 12px;
+  }
+  .server-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .server-card-title {
+    font-weight: 700;
+    color: #f1f5f9;
+    font-size: 13px;
+  }
+  .server-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .server-field {
+    display: grid;
+    gap: 4px;
+  }
+  .server-field.full { grid-column: 1 / -1; }
+  .server-field label {
+    color: #64748b;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
+  .server-input {
+    width: 100%;
+    border: 1px solid #334155;
+    border-radius: 7px;
+    background: #1e293b;
+    color: #e2e8f0;
+    padding: 7px 8px;
+    font-size: 12px;
+    outline: none;
+  }
+  .server-input:focus {
+    border-color: #60a5fa;
+  }
+  html.theme-light .server-input {
+    background: #f8fafc;
+    color: #1e293b;
+    border-color: #cbd5e1;
+  }
+  html.theme-light .server-input::placeholder {
+    color: #94a3b8;
+  }
+  html.theme-light .server-input:focus {
+    background: #f1f5f9;
+    border-color: #60a5fa;
+  }
+  .server-remove {
+    border: none;
+    background: transparent;
+    color: #f87171;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .server-remove:hover { text-decoration: underline; }
+  .server-empty {
+    color: #64748b;
+    font-size: 12px;
+    padding: 12px;
+    border: 1px dashed #334155;
+    border-radius: 10px;
+  }
+  .server-save-status {
+    min-height: 16px;
+    color: #64748b;
+    font-size: 12px;
+    margin-top: 10px;
+  }
 
   /* Compact mode */
   body.compact .summary-bar { display: none; }
@@ -792,10 +907,13 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .host-card,
   .btn-refresh,
   .settings-button,
-  .settings-panel {
+  .settings-panel,
+  .server-card {
     background: var(--surface);
     border-color: var(--border);
   }
+  .settings-action,
+  .server-input { border-color: var(--border); }
 
   .host-card:hover {
     border-color: var(--border-hover);
@@ -820,6 +938,10 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .settings-panel,
   .settings-section,
   .settings-global-watch,
+  .settings-action,
+  .server-card,
+  .server-input,
+  .server-empty,
   .interval-select,
   #ui-tooltip,
   .watch-btn .watch-tooltip,
@@ -834,6 +956,8 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .gpu-name,
   .settings-row,
   .settings-title,
+  .server-card-title,
+  .server-input,
   #ui-tooltip,
   .watch-btn .watch-tooltip { color: var(--text); }
   .bar-track,
@@ -841,6 +965,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .mode-toggle,
   .theme-toggle,
   .settings-close,
+  .settings-action,
   .interval-select,
   #ui-tooltip,
   .watch-btn .watch-tooltip { background: var(--surface-muted); }
@@ -856,6 +981,9 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .collapse-arrow,
   .watch-btn,
   .settings-section-title,
+  .server-field label,
+  .server-empty,
+  .server-save-status,
   .settings-subtitle,
   .settings-note { color: var(--icon-muted); }
   .badge-ok,
@@ -1002,6 +1130,20 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
         </select>
       </div>
     </section>
+
+    <section class="settings-section">
+      <div class="settings-section-title">Servers</div>
+      <div class="server-toolbar">
+        <button class="settings-action" onclick="addServerConfig()">Add Server</button>
+        <button class="settings-action" onclick="importSshConfig(false)">Import SSH Config</button>
+        <button class="settings-action" onclick="saveServerConfigs()">Save Servers</button>
+      </div>
+      <div class="settings-note">Servers are stored separately from SSH config. Passwords are saved locally in this gnvitop config file.</div>
+      <div class="server-save-status" id="server-save-status"></div>
+      <div class="server-list" id="server-list">
+        <div class="server-empty">Loading server config...</div>
+      </div>
+    </section>
   </aside>
 </div>
 
@@ -1046,6 +1188,7 @@ let isFirstRender = true;
 let refreshIntervalSecs = parseInt(localStorage.getItem('gnvitop-interval') || '30');
 let hostOrder = JSON.parse(localStorage.getItem('gnvitop-order') || '[]'); // pinned manual order
 let currentTheme = localStorage.getItem('gnvitop-theme') || 'dark';
+let serverConfigs = [];
 
 function setTheme(theme) {
   currentTheme = theme === 'light' ? 'light' : 'dark';
@@ -1066,6 +1209,7 @@ function toggleSettings(open) {
   const overlay = document.getElementById('settings-overlay');
   if (!overlay) return;
   syncSettingsControls();
+  if (open && !serverConfigs.length) loadServerConfigs();
   overlay.classList.toggle('open', !!open);
 }
 
@@ -1134,6 +1278,169 @@ function syncSettingsGlobalWatchBtn() {
   target.textContent = source.textContent;
   target.classList.toggle('watching', source.classList.contains('watching'));
   target.title = source.title;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+async function loadServerConfigs() {
+  const list = document.getElementById('server-list');
+  try {
+    const resp = await fetch('/api/config/hosts');
+    const data = await resp.json();
+    serverConfigs = data.hosts || [];
+    renderServerConfigs();
+  } catch (e) {
+    if (list) list.innerHTML = '<div class="server-empty">Failed to load server config.</div>';
+  }
+}
+
+function renderServerConfigs() {
+  const list = document.getElementById('server-list');
+  if (!list) return;
+  if (!serverConfigs.length) {
+    list.innerHTML = '<div class="server-empty">No configured remote servers. Add one or import from SSH config.</div>';
+    return;
+  }
+  list.innerHTML = serverConfigs.map((host, idx) => `
+    <div class="server-card" data-index="${idx}">
+      <div class="server-card-head">
+        <label class="toggle-switch">
+          <input type="checkbox" data-field="enabled" ${host.enabled !== false ? 'checked' : ''} onchange="updateServerField(${idx}, 'enabled', this.checked)">
+          <span class="toggle-knob"></span>
+          <span class="server-card-title">${escapeHtml(host.alias || 'New Server')}</span>
+        </label>
+        <button class="server-remove" onclick="removeServerConfig(${idx})">Remove</button>
+      </div>
+      <div class="server-grid">
+        <div class="server-field">
+          <label>Alias</label>
+          <input class="server-input" value="${escapeHtml(host.alias)}" oninput="updateServerField(${idx}, 'alias', this.value)">
+        </div>
+        <div class="server-field">
+          <label>Hostname</label>
+          <input class="server-input" value="${escapeHtml(host.hostname)}" oninput="updateServerField(${idx}, 'hostname', this.value)">
+        </div>
+        <div class="server-field">
+          <label>User</label>
+          <input class="server-input" value="${escapeHtml(host.user)}" oninput="updateServerField(${idx}, 'user', this.value)">
+        </div>
+        <div class="server-field">
+          <label>Port</label>
+          <input class="server-input" type="number" min="1" max="65535" value="${escapeHtml(host.port || 22)}" oninput="updateServerField(${idx}, 'port', this.value)">
+        </div>
+        <div class="server-field full">
+          <label>Identity File</label>
+          <input class="server-input" value="${escapeHtml(host.identity_file)}" placeholder="~/.ssh/id_rsa" oninput="updateServerField(${idx}, 'identity_file', this.value)">
+        </div>
+        <div class="server-field full">
+          <label>Password ${host.has_password ? '(saved, leave blank to keep)' : '(optional)'}</label>
+          <input class="server-input" type="password" value="" placeholder="${host.has_password ? 'Keep existing password' : 'Password'}" oninput="updateServerField(${idx}, 'password', this.value)">
+        </div>
+        <div class="server-field">
+          <label>ProxyJump</label>
+          <input class="server-input" value="${escapeHtml(host.proxy_jump)}" oninput="updateServerField(${idx}, 'proxy_jump', this.value)">
+        </div>
+        <div class="server-field">
+          <label>ProxyCommand</label>
+          <input class="server-input" value="${escapeHtml(host.proxy_command)}" oninput="updateServerField(${idx}, 'proxy_command', this.value)">
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function updateServerField(index, field, value) {
+  if (!serverConfigs[index]) return;
+  serverConfigs[index][field] = field === 'enabled' ? !!value : value;
+}
+
+function addServerConfig() {
+  const nextIndex = serverConfigs.length + 1;
+  serverConfigs.push({
+    alias: 'new-server-' + nextIndex,
+    hostname: '',
+    user: '',
+    port: 22,
+    identity_file: '',
+    password: '',
+    proxy_jump: '',
+    proxy_command: '',
+    enabled: true,
+  });
+  renderServerConfigs();
+  const status = document.getElementById('server-save-status');
+  if (status) status.textContent = 'Added a new server draft. Fill it in, then click Save Servers.';
+}
+
+function removeServerConfig(index) {
+  const host = serverConfigs[index];
+  const label = host && host.alias ? host.alias : 'this server';
+  if (!confirm('Remove ' + label + ' from monitored servers?')) return;
+  serverConfigs.splice(index, 1);
+  renderServerConfigs();
+  const status = document.getElementById('server-save-status');
+  if (status) status.textContent = 'Removed server draft. Click Save Servers to apply.';
+}
+
+function serializeServerConfigs() {
+  return serverConfigs.map(host => {
+    const out = {
+      alias: host.alias || '',
+      hostname: host.hostname || '',
+      user: host.user || '',
+      port: parseInt(host.port || 22),
+      identity_file: host.identity_file || '',
+      proxy_jump: host.proxy_jump || '',
+      proxy_command: host.proxy_command || '',
+      enabled: host.enabled !== false,
+    };
+    out.password = host.password ? host.password : (host.has_password ? '__KEEP__' : '');
+    return out;
+  });
+}
+
+async function saveServerConfigs() {
+  const status = document.getElementById('server-save-status');
+  if (status) status.textContent = 'Saving...';
+  try {
+    const resp = await fetch('/api/config/hosts', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({hosts: serializeServerConfigs()}),
+    });
+    if (!resp.ok) throw new Error('Save failed');
+    const data = await resp.json();
+    serverConfigs = data.hosts || [];
+    renderServerConfigs();
+    if (status) status.textContent = 'Saved. Refreshing monitored hosts...';
+    refresh();
+  } catch (e) {
+    if (status) status.textContent = 'Save failed: ' + e.message;
+  }
+}
+
+async function importSshConfig(replace) {
+  const status = document.getElementById('server-save-status');
+  if (status) status.textContent = 'Importing SSH config...';
+  try {
+    const resp = await fetch('/api/config/import-ssh', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({replace: !!replace}),
+    });
+    if (!resp.ok) throw new Error('Import failed');
+    const data = await resp.json();
+    serverConfigs = data.hosts || [];
+    renderServerConfigs();
+    if (status) status.textContent = 'Imported from SSH config. Refreshing monitored hosts...';
+    refresh();
+  } catch (e) {
+    if (status) status.textContent = 'Import failed: ' + e.message;
+  }
 }
 
 function _applyHostOrder(list) {
@@ -1668,6 +1975,7 @@ function updateTime(ts) {
 
 async function init() {
   setTheme(currentTheme);
+  loadServerConfigs();
   // Restore notify toggle state
   const notifyChk = document.getElementById('notify-toggle');
   if (notifyChk) {
