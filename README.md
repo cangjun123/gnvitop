@@ -9,9 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="https://pypi.org/project/gnvitop/"><img src="https://img.shields.io/pypi/v/gnvitop?color=blue" alt="PyPI"></a>
-  <a href="https://pypi.org/project/gnvitop/"><img src="https://img.shields.io/pypi/pyversions/gnvitop" alt="Python"></a>
-  <a href="https://github.com/Linwei94/gnvitop/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Linwei94/gnvitop" alt="License"></a>
+  <a href="https://github.com/cangjun123/gnvitop"><img src="https://img.shields.io/badge/fork-cangjun123%2Fgnvitop-blue" alt="Fork"></a>
+  <a href="https://github.com/cangjun123/gnvitop"><img src="https://img.shields.io/github/license/cangjun123/gnvitop" alt="License"></a>
 </p>
 
 ![960cd5fae22199ece06060e7ec8862a4](https://github.com/user-attachments/assets/2ca35564-c891-4af9-9b30-5ebb0949ba99)
@@ -19,7 +18,9 @@
 Like [nvitop](https://github.com/XuehaiPan/nvitop), but for **all your servers at once** — NVIDIA GPUs, MetaX GPUs, Google Cloud TPUs, and Gadi NCI compute nodes, displayed as a beautiful web dashboard.
 
 ```
-pip install gnvitop
+git clone git@github.com:cangjun123/gnvitop.git
+cd gnvitop
+pip install -e .
 gnvitop
 ```
 
@@ -53,8 +54,20 @@ graph LR
 
 ## Installation
 
+Use this fork directly. Do not install the published PyPI package if you want the customized dashboard and server settings in this repository.
+
 ```bash
-pip install gnvitop
+git clone git@github.com:cangjun123/gnvitop.git
+cd gnvitop
+pip install -e .
+```
+
+If you do not use GitHub SSH keys, clone over HTTPS instead:
+
+```bash
+git clone https://github.com/cangjun123/gnvitop.git
+cd gnvitop
+pip install -e .
 ```
 
 ## Usage
@@ -111,7 +124,7 @@ Host tpu-v4-8
 ## Features
 
 - **Zero config** — reads `~/.ssh/config` automatically, no setup needed
-- **One command** — `pip install gnvitop && gnvitop`, that's it
+- **Fork-first install** — clone `cangjun123/gnvitop` and run `pip install -e .` to use this customized version
 - **Local + Remote** — monitors local accelerator alongside all remote servers
 - **Multi-vendor** — supports NVIDIA GPUs (`nvidia-smi`), MetaX GPUs (`mx-smi`), and Google Cloud TPUs
 - **Non-bash shell safe** — wraps remote commands in `bash -c` so it works even if the remote login shell is fish, zsh, etc.
