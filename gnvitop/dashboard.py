@@ -1298,78 +1298,78 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   <aside class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
     <div class="settings-head">
       <div>
-        <div class="settings-title" id="settings-title">Settings</div>
-        <div class="settings-subtitle">Customize dashboard appearance and refresh behavior.</div>
+        <div class="settings-title" id="settings-title">设置</div>
+        <div class="settings-subtitle">自定义界面显示与刷新行为。</div>
       </div>
-      <button class="settings-close" onclick="toggleSettings(false)" aria-label="Close settings">&times;</button>
+      <button class="settings-close" onclick="toggleSettings(false)" aria-label="关闭设置">&times;</button>
     </div>
 
     <section class="settings-section">
-      <div class="settings-section-title">Appearance</div>
+      <div class="settings-section-title">外观</div>
       <div class="settings-row">
-        <span>Theme</span>
+        <span>主题</span>
         <div class="theme-toggle">
-          <button onclick="setSettingsTheme('dark')" id="settings-theme-dark">Dark</button>
-          <button onclick="setSettingsTheme('light')" id="settings-theme-light">Light</button>
+          <button onclick="setSettingsTheme('dark')" id="settings-theme-dark">深色</button>
+          <button onclick="setSettingsTheme('light')" id="settings-theme-light">浅色</button>
         </div>
       </div>
       <div class="settings-row">
-        <span>Layout</span>
+        <span>布局</span>
         <div class="mode-toggle">
-          <button onclick="setSettingsMode('compact')" id="settings-mode-compact">Compact</button>
-          <button onclick="setSettingsMode('normal')" id="settings-mode-normal">Expand</button>
+          <button onclick="setSettingsMode('compact')" id="settings-mode-compact">紧凑</button>
+          <button onclick="setSettingsMode('normal')" id="settings-mode-normal">展开</button>
         </div>
       </div>
     </section>
 
     <section class="settings-section">
-      <div class="settings-section-title">Notifications</div>
+      <div class="settings-section-title">通知</div>
       <div class="settings-row">
-        <span>Notify on free GPUs</span>
-        <label class="toggle-switch" data-tip="Enable GPU availability notifications. Use the bell on each card to select hosts.">
+        <span>GPU 空闲时通知</span>
+        <label class="toggle-switch" data-tip="启用 GPU 空闲通知。可在每张卡片上用铃铛选择服务器。">
           <input type="checkbox" id="settings-notify-toggle" onchange="setSettingsNotify(this.checked)">
           <span class="toggle-knob"></span>
-          <span class="toggle-label">Notify</span>
+          <span class="toggle-label">通知</span>
         </label>
       </div>
       <div class="settings-row">
-        <span>Watch all hosts</span>
-        <button class="global-watch-btn settings-global-watch" id="settings-global-watch-btn" onclick="toggleGlobalWatch()" data-tip="Watch all hosts for free GPUs">&#128277;</button>
+        <span>监控所有服务器</span>
+        <button class="global-watch-btn settings-global-watch" id="settings-global-watch-btn" onclick="toggleGlobalWatch()" data-tip="监控所有服务器的空闲 GPU">&#128277;</button>
       </div>
-      <div class="settings-note">Per-host watch buttons remain available on each server card when notifications are enabled.</div>
+      <div class="settings-note">启用通知后，仍可在每张服务器卡片上单独选择要监控的服务器。</div>
     </section>
 
     <section class="settings-section">
-      <div class="settings-section-title">Refresh</div>
+      <div class="settings-section-title">刷新</div>
       <div class="settings-row">
-        <span>Auto refresh</span>
-        <label class="toggle-switch" data-tip="Automatically fetch latest GPU data at the selected interval">
+        <span>自动刷新</span>
+        <label class="toggle-switch" data-tip="按所选间隔自动获取最新 GPU 数据">
           <input type="checkbox" id="settings-auto-refresh" onchange="setSettingsAutoRefresh(this.checked)" checked>
           <span class="toggle-knob"></span>
-          <span class="toggle-label">Enabled</span>
+          <span class="toggle-label">启用</span>
         </label>
       </div>
       <div class="settings-row">
-        <span>Interval</span>
-        <select class="interval-select" id="settings-interval-select" onchange="setSettingsInterval(this.value)" data-tip="Auto-refresh interval">
-          <option value="5">5s</option>
-          <option value="10">10s</option>
-          <option value="30" selected>30s</option>
-          <option value="300">5min</option>
+        <span>间隔</span>
+        <select class="interval-select" id="settings-interval-select" onchange="setSettingsInterval(this.value)" data-tip="自动刷新间隔">
+          <option value="5">5 秒</option>
+          <option value="10">10 秒</option>
+          <option value="30" selected>30 秒</option>
+          <option value="300">5 分钟</option>
         </select>
       </div>
       <div class="settings-row">
-        <span>Monitor localhost</span>
-        <label class="toggle-switch" data-tip="Include this machine as localhost in monitoring results">
+        <span>监控本机</span>
+        <label class="toggle-switch" data-tip="将本机作为 localhost 加入监控结果">
           <input type="checkbox" id="settings-monitor-local" onchange="setSettingsMonitorLocal(this.checked)" checked>
           <span class="toggle-knob"></span>
-          <span class="toggle-label">Local</span>
+          <span class="toggle-label">本机</span>
         </label>
       </div>
     </section>
 
     <section class="settings-section">
-      <div class="settings-section-title">Default Metrics</div>
+      <div class="settings-section-title">默认指标</div>
       <div class="settings-row">
         <span>GPU</span>
         <label class="toggle-switch">
@@ -1387,41 +1387,41 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
         </label>
       </div>
       <div class="settings-row">
-        <span>Memory</span>
+        <span>内存</span>
         <label class="toggle-switch">
           <input type="checkbox" id="settings-metric-memory" onchange="setMetricSetting('memory', this.checked)" checked>
           <span class="toggle-knob"></span>
-          <span class="toggle-label">Memory</span>
+          <span class="toggle-label">内存</span>
         </label>
       </div>
       <div class="settings-row">
-        <span>Disk</span>
+        <span>硬盘</span>
         <label class="toggle-switch">
           <input type="checkbox" id="settings-metric-disk" onchange="setMetricSetting('disk', this.checked)" checked>
           <span class="toggle-knob"></span>
-          <span class="toggle-label">Disk</span>
+          <span class="toggle-label">硬盘</span>
         </label>
       </div>
       <div class="settings-row">
-        <span>Local disk path</span>
-        <input class="server-input settings-path-input" id="settings-local-disk-path" value="~" placeholder="~, /, /data" oninput="setLocalDiskPath(this.value)" onblur="syncSettingsControls()" data-tip="Monitor the filesystem containing this path on localhost">
+        <span>本机磁盘路径</span>
+        <input class="server-input settings-path-input" id="settings-local-disk-path" value="~" placeholder="~, /, /data" oninput="setLocalDiskPath(this.value)" onblur="syncSettingsControls()" data-tip="监控 localhost 上包含此路径的文件系统">
       </div>
-      <div class="settings-note">These defaults apply to localhost and newly added/imported servers. Remote servers can override metrics and disk paths in each server card.</div>
+      <div class="settings-note">这些默认值用于本机以及新添加/导入的服务器。远程服务器可在各自卡片中覆盖指标和磁盘路径。</div>
     </section>
 
     <section class="settings-section">
-      <div class="settings-section-title">Servers</div>
+      <div class="settings-section-title">服务器</div>
       <div class="server-toolbar">
-        <button class="settings-action" onclick="addServerConfig()">Add Server</button>
-        <button class="settings-action" onclick="importSshConfig(false)">Import SSH Config</button>
-        <button class="settings-action" onclick="exportServerConfig()">Export Config</button>
-        <button class="settings-action" onclick="selectConfigImportFile()">Import Config</button>
+        <button class="settings-action" onclick="addServerConfig()">添加服务器</button>
+        <button class="settings-action" onclick="importSshConfig(false)">导入 SSH 配置</button>
+        <button class="settings-action" onclick="exportServerConfig()">导出配置</button>
+        <button class="settings-action" onclick="selectConfigImportFile()">导入配置</button>
       </div>
       <input class="hidden-file-input" id="config-import-file" type="file" accept="application/json,.json" onchange="importConfigFile(this.files[0]); this.value='';">
-      <div class="settings-note">Servers are stored separately from SSH config. Changes are saved automatically. Passwords are saved locally in this gnvitop config file, and exported config files include them.</div>
+      <div class="settings-note">服务器配置独立于 SSH 配置保存。修改会自动保存。密码保存在本地 gnvitop 配置文件中，导出的配置文件也会包含密码。</div>
       <div class="server-save-status" id="server-save-status"></div>
       <div class="server-list" id="server-list">
-        <div class="server-empty">Loading server config...</div>
+        <div class="server-empty">正在加载服务器配置...</div>
       </div>
     </section>
   </aside>
@@ -1592,7 +1592,7 @@ function setSettingsInterval(secs) {
 async function setSettingsMonitorLocal(enabled) {
   monitorLocal = !!enabled;
   const status = document.getElementById('server-save-status');
-  if (status) status.textContent = 'Saving local monitoring setting...';
+  if (status) status.textContent = '正在保存本机监控设置...';
   syncSettingsControls();
   scheduleServerConfigSave(0);
 }
@@ -1600,7 +1600,7 @@ async function setSettingsMonitorLocal(enabled) {
 function setMetricSetting(metric, enabled) {
   metricSettings[metric] = !!enabled;
   const status = document.getElementById('server-save-status');
-  if (status) status.textContent = 'Saving metric setting...';
+  if (status) status.textContent = '正在保存指标设置...';
   syncSettingsControls();
   scheduleServerConfigSave(0);
 }
@@ -1608,7 +1608,7 @@ function setMetricSetting(metric, enabled) {
 function setLocalDiskPath(value) {
   localDiskPath = value;
   const status = document.getElementById('server-save-status');
-  if (status) status.textContent = 'Saving local disk path...';
+  if (status) status.textContent = '正在保存本机磁盘路径...';
   scheduleServerConfigSave();
 }
 
@@ -1618,7 +1618,7 @@ function syncSettingsGlobalWatchBtn() {
   if (!source || !target) return;
   target.textContent = source.textContent;
   target.classList.toggle('watching', source.classList.contains('watching'));
-  target.title = source.title;
+  target.title = target.classList.contains('watching') ? '取消监控所有服务器' : '监控所有服务器的空闲 GPU';
 }
 
 function escapeHtml(value) {
@@ -1643,7 +1643,7 @@ async function loadServerConfigs() {
     syncSettingsControls();
     renderServerConfigs();
   } catch (e) {
-    if (list) list.innerHTML = '<div class="server-empty">Failed to load server config.</div>';
+    if (list) list.innerHTML = '<div class="server-empty">加载服务器配置失败。</div>';
   }
 }
 
@@ -1661,12 +1661,12 @@ function renderServerMetricToggles(index, host) {
   const metrics = normalizeMetricConfig(host.metrics || metricSettings);
   return `
     <div class="server-field full">
-      <label>Metrics</label>
+      <label>指标</label>
       <div class="server-metrics">
         ${renderServerMetricToggle(index, metrics, 'gpu', 'GPU')}
         ${renderServerMetricToggle(index, metrics, 'cpu', 'CPU')}
-        ${renderServerMetricToggle(index, metrics, 'memory', 'Memory')}
-        ${renderServerMetricToggle(index, metrics, 'disk', 'Disk')}
+        ${renderServerMetricToggle(index, metrics, 'memory', '内存')}
+        ${renderServerMetricToggle(index, metrics, 'disk', '硬盘')}
       </div>
     </div>
   `;
@@ -1676,7 +1676,7 @@ function renderServerConfigs() {
   const list = document.getElementById('server-list');
   if (!list) return;
   if (!serverConfigs.length) {
-    list.innerHTML = '<div class="server-empty">No configured remote servers. Add one or import from SSH config.</div>';
+    list.innerHTML = '<div class="server-empty">尚未配置远程服务器。可以添加服务器或从 SSH 配置导入。</div>';
     return;
   }
   list.innerHTML = serverConfigs.map((host, idx) => `
@@ -1685,39 +1685,39 @@ function renderServerConfigs() {
         <label class="toggle-switch">
           <input type="checkbox" data-field="enabled" ${host.enabled !== false ? 'checked' : ''} onchange="updateServerField(${idx}, 'enabled', this.checked)">
           <span class="toggle-knob"></span>
-          <span class="server-card-title">${escapeHtml(host.alias || 'New Server')}</span>
+          <span class="server-card-title">${escapeHtml(host.alias || '新服务器')}</span>
         </label>
-        <button class="server-remove" onclick="removeServerConfig(${idx})">Remove</button>
+        <button class="server-remove" onclick="removeServerConfig(${idx})">移除</button>
       </div>
       <div class="server-grid">
         <div class="server-field">
-          <label>Alias</label>
+          <label>别名</label>
           <input class="server-input" value="${escapeHtml(host.alias)}" oninput="updateServerField(${idx}, 'alias', this.value)">
         </div>
         <div class="server-field">
-          <label>Hostname</label>
+          <label>主机名</label>
           <input class="server-input" value="${escapeHtml(host.hostname)}" oninput="updateServerField(${idx}, 'hostname', this.value)">
         </div>
         <div class="server-field">
-          <label>User</label>
+          <label>用户名</label>
           <input class="server-input" value="${escapeHtml(host.user)}" oninput="updateServerField(${idx}, 'user', this.value)">
         </div>
         <div class="server-field">
-          <label>Port</label>
+          <label>端口</label>
           <input class="server-input" type="number" min="1" max="65535" value="${escapeHtml(host.port || 22)}" oninput="updateServerField(${idx}, 'port', this.value)">
         </div>
         <div class="server-field full">
-          <label>Disk Path</label>
+          <label>磁盘路径</label>
           <input class="server-input" value="${escapeHtml(host.disk_path || '~')}" placeholder="~, /, /data" oninput="updateServerField(${idx}, 'disk_path', this.value)">
         </div>
         ${renderServerMetricToggles(idx, host)}
         <div class="server-field full">
-          <label>Identity File</label>
+          <label>密钥文件</label>
           <input class="server-input" value="${escapeHtml(host.identity_file)}" placeholder="~/.ssh/id_rsa" oninput="updateServerField(${idx}, 'identity_file', this.value)">
         </div>
         <div class="server-field full">
-          <label>Password ${host.has_password ? '(saved, leave blank to keep)' : '(optional)'}</label>
-          <input class="server-input" type="password" value="" placeholder="${host.has_password ? 'Keep existing password' : 'Password'}" oninput="updateServerField(${idx}, 'password', this.value)">
+          <label>密码 ${host.has_password ? '（已保存，留空则保留）' : '（可选）'}</label>
+          <input class="server-input" type="password" value="" placeholder="${host.has_password ? '保留已有密码' : '密码'}" oninput="updateServerField(${idx}, 'password', this.value)">
         </div>
         <div class="server-field">
           <label>ProxyJump</label>
@@ -1743,7 +1743,7 @@ function updateServerMetric(index, metric, enabled) {
   serverConfigs[index].metrics = normalizeMetricConfig(serverConfigs[index].metrics || metricSettings);
   serverConfigs[index].metrics[metric] = !!enabled;
   const status = document.getElementById('server-save-status');
-  if (status) status.textContent = 'Saving server metric setting...';
+  if (status) status.textContent = '正在保存服务器指标设置...';
   scheduleServerConfigSave(0);
 }
 
@@ -1764,18 +1764,18 @@ function addServerConfig() {
   });
   renderServerConfigs();
   const status = document.getElementById('server-save-status');
-  if (status) status.textContent = 'Added a new server. Auto-saving...';
+  if (status) status.textContent = '已添加服务器，正在自动保存...';
   scheduleServerConfigSave(0);
 }
 
 function removeServerConfig(index) {
   const host = serverConfigs[index];
-  const label = host && host.alias ? host.alias : 'this server';
-  if (!confirm('Remove ' + label + ' from monitored servers?')) return;
+  const label = host && host.alias ? host.alias : '此服务器';
+  if (!confirm('确定要从监控服务器中移除 "' + label + '" 吗？')) return;
   serverConfigs.splice(index, 1);
   renderServerConfigs();
   const status = document.getElementById('server-save-status');
-  if (status) status.textContent = 'Removed server. Auto-saving...';
+  if (status) status.textContent = '已移除服务器，正在自动保存...';
   scheduleServerConfigSave(0);
 }
 
@@ -1801,7 +1801,7 @@ function serializeServerConfigs() {
 function scheduleServerConfigSave(delay = 700) {
   clearTimeout(serverSaveTimer);
   const status = document.getElementById('server-save-status');
-  if (status) status.textContent = delay ? 'Unsaved changes. Auto-saving...' : 'Saving...';
+  if (status) status.textContent = delay ? '有未保存的修改，正在自动保存...' : '正在保存...';
   serverSaveTimer = setTimeout(saveServerConfigs, delay);
 }
 
@@ -1811,14 +1811,14 @@ async function saveServerConfigs() {
     serverSaveTimer = null;
   }
   const status = document.getElementById('server-save-status');
-  if (status) status.textContent = 'Saving...';
+  if (status) status.textContent = '正在保存...';
   try {
     const resp = await fetch('/api/config/hosts', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({hosts: serializeServerConfigs(), monitor_local: monitorLocal, metrics: metricSettings, local_disk_path: localDiskPath}),
     });
-    if (!resp.ok) throw new Error('Save failed');
+    if (!resp.ok) throw new Error('保存失败');
     const data = await resp.json();
     serverConfigs = data.hosts || [];
     monitorLocal = data.monitor_local !== false;
@@ -1826,11 +1826,11 @@ async function saveServerConfigs() {
     localDiskPath = data.local_disk_path || data.disk_path || '~';
     renderServerConfigs();
     syncSettingsControls();
-    if (status) status.textContent = 'Saved. Refreshing monitored hosts...';
+    if (status) status.textContent = '已保存，正在刷新监控服务器...';
     refresh();
     return true;
   } catch (e) {
-    if (status) status.textContent = 'Save failed: ' + e.message;
+    if (status) status.textContent = '保存失败：' + e.message;
     return false;
   }
 }
@@ -1842,14 +1842,14 @@ function selectConfigImportFile() {
 
 async function exportServerConfig() {
   const status = document.getElementById('server-save-status');
-  if (status) status.textContent = 'Preparing config export...';
+  if (status) status.textContent = '正在准备导出配置...';
   try {
     if (serverSaveTimer) {
       const saved = await saveServerConfigs();
-      if (!saved) throw new Error('Save failed before export');
+      if (!saved) throw new Error('导出前保存失败');
     }
     const resp = await fetch('/api/config/export');
-    if (!resp.ok) throw new Error('Export failed');
+    if (!resp.ok) throw new Error('导出失败');
     const blob = await resp.blob();
     const url = URL.createObjectURL(blob);
     const date = new Date().toISOString().slice(0, 10);
@@ -1860,21 +1860,21 @@ async function exportServerConfig() {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    if (status) status.textContent = 'Config exported. Keep it private if it contains passwords.';
+    if (status) status.textContent = '配置已导出。如果包含密码，请妥善保管。';
   } catch (e) {
-    if (status) status.textContent = 'Export failed: ' + e.message;
+    if (status) status.textContent = '导出失败：' + e.message;
   }
 }
 
 async function importConfigFile(file) {
   if (!file) return;
-  if (!confirm('Import this config file and replace current server/settings config?')) return;
+  if (!confirm('导入此配置文件并替换当前服务器和设置配置？')) return;
   if (serverSaveTimer) {
     clearTimeout(serverSaveTimer);
     serverSaveTimer = null;
   }
   const status = document.getElementById('server-save-status');
-  if (status) status.textContent = 'Importing config file...';
+  if (status) status.textContent = '正在导入配置文件...';
   try {
     const payload = JSON.parse(await file.text());
     const resp = await fetch('/api/config/import', {
@@ -1883,34 +1883,34 @@ async function importConfigFile(file) {
       body: JSON.stringify(payload),
     });
     const data = await resp.json().catch(() => ({}));
-    if (!resp.ok) throw new Error(data.error || 'Import failed');
+    if (!resp.ok) throw new Error(data.error || '导入失败');
     serverConfigs = data.hosts || [];
     monitorLocal = data.monitor_local !== false;
     metricSettings = normalizeMetricConfig(data.metrics);
     localDiskPath = data.local_disk_path || data.disk_path || '~';
     renderServerConfigs();
     syncSettingsControls();
-    if (status) status.textContent = 'Config imported. Refreshing monitored hosts...';
+    if (status) status.textContent = '配置已导入，正在刷新监控服务器...';
     refresh();
   } catch (e) {
-    if (status) status.textContent = 'Import failed: ' + e.message;
+    if (status) status.textContent = '导入失败：' + e.message;
   }
 }
 
 async function importSshConfig(replace) {
   const message = replace
-    ? 'Replace current server config with hosts from SSH config?'
-    : 'Import hosts from SSH config? Existing servers with the same hostname/IP and port will be kept.';
+    ? '用 SSH 配置中的服务器替换当前服务器配置？'
+    : '从 SSH 配置导入服务器？不会覆盖已有相同主机名/IP 和端口的服务器。';
   if (!confirm(message)) return;
   const status = document.getElementById('server-save-status');
-  if (status) status.textContent = 'Importing SSH config...';
+  if (status) status.textContent = '正在导入 SSH 配置...';
   try {
     const resp = await fetch('/api/config/import-ssh', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({replace: !!replace}),
     });
-    if (!resp.ok) throw new Error('Import failed');
+    if (!resp.ok) throw new Error('导入失败');
     const data = await resp.json();
     serverConfigs = data.hosts || [];
     monitorLocal = data.monitor_local !== false;
@@ -1918,10 +1918,10 @@ async function importSshConfig(replace) {
     localDiskPath = data.local_disk_path || data.disk_path || '~';
     renderServerConfigs();
     syncSettingsControls();
-    if (status) status.textContent = 'Imported from SSH config. Refreshing monitored hosts...';
+    if (status) status.textContent = '已从 SSH 配置导入，正在刷新监控服务器...';
     refresh();
   } catch (e) {
-    if (status) status.textContent = 'Import failed: ' + e.message;
+    if (status) status.textContent = '导入失败：' + e.message;
   }
 }
 
