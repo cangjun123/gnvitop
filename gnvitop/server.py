@@ -23,6 +23,13 @@ app = Flask(__name__)
 SSH_CONFIG_PATH = os.path.expanduser("~/.ssh/config")
 SERVER_CONFIG_PATH = os.path.expanduser("~/.gnvitop/servers.json")
 SSH_TIMEOUT = 45
+DEFAULT_DISK_PATH = "~"
+DEFAULT_METRICS = {
+    "gpu": True,
+    "cpu": True,
+    "memory": True,
+    "disk": True,
+}
 
 # ── nvidia-smi queries ────────────────────────────────────────────────────────
 _GPU_QUERY = (
@@ -72,6 +79,43 @@ COMBINED_CMD = (
     "echo TPU; " + _TPU_CHIP_QUERY + "; echo '---SEP---'; " + _TPU_PROC_QUERY + "; "
     "fi"
 )
+
+SYSTEM_CMD = r"""
+read cpu a b c d e f g h i j < /proc/stat
+total1=$((a+b+c+d+e+f+g+h+i+j)); idle1=$((d+e))
+sleep 0.2
+read cpu a b c d e f g h i j < /proc/stat
+total2=$((a+b+c+d+e+f+g+h+i+j)); idle2=$((d+e))
+dt=$((total2-total1)); di=$((idle2-idle1))
+cpu_pct=$(awk -v dt="$dt" -v di="$di" 'BEGIN{ if (dt > 0) printf "%.1f", (1 - di/dt) * 100; else printf "0.0" }')
+cores=$(getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null || echo 0)
+read load1 load5 load15 rest < /proc/loadavg
+mem_total=$(awk '/^MemTotal:/ {printf "%.0f", $2*1024}' /proc/meminfo)
+mem_avail=$(awk '/^MemAvailable:/ {printf "%.0f", $2*1024}' /proc/meminfo)
+mem_used=$((mem_total-mem_avail))
+mem_pct=$(awk -v used="$mem_used" -v total="$mem_total" 'BEGIN{ if (total > 0) printf "%.1f", used/total*100; else printf "0.0" }')
+json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+configured_disk_path="${GNVITOP_DISK_PATH:-~}"
+home_dir=$(cd ~ 2>/dev/null && pwd || echo "$HOME")
+case "$configured_disk_path" in
+  ""|"~") disk_path="$home_dir" ;;
+  "~/"*) disk_path="${home_dir}/${configured_disk_path#~/}" ;;
+  *) disk_path="$configured_disk_path" ;;
+esac
+disk_line=$(df -B1 -P "$disk_path" 2>/dev/null | tail -1)
+disk_total=$(echo "$disk_line" | awk '{print $2}')
+disk_used=$(echo "$disk_line" | awk '{print $3}')
+disk_free=$(echo "$disk_line" | awk '{print $4}')
+disk_mount=$(echo "$disk_line" | awk '{print $6}')
+[ -z "$disk_total" ] && disk_total=0
+[ -z "$disk_used" ] && disk_used=0
+[ -z "$disk_free" ] && disk_free=0
+[ -z "$disk_mount" ] && disk_mount="$disk_path"
+disk_pct=$(awk -v used="$disk_used" -v total="$disk_total" 'BEGIN{ if (total > 0) printf "%.1f", used/total*100; else printf "0.0" }')
+disk_mount_json=$(json_escape "$disk_mount")
+disk_path_json=$(json_escape "$disk_path")
+printf '{"cpu":{"usage_pct":%s,"cores":%s,"load1":%s,"load5":%s,"load15":%s},"memory":{"total_bytes":%s,"used_bytes":%s,"available_bytes":%s,"usage_pct":%s},"disk":{"mount":"%s","path":"%s","total_bytes":%s,"used_bytes":%s,"free_bytes":%s,"usage_pct":%s}}\n' "$cpu_pct" "$cores" "$load1" "$load5" "$load15" "$mem_total" "$mem_used" "$mem_avail" "$mem_pct" "$disk_mount_json" "$disk_path_json" "$disk_total" "$disk_used" "$disk_free" "$disk_pct"
+"""
 
 CURRENT_USER = getpass.getuser()
 
@@ -142,7 +186,12 @@ def parse_ssh_config(path):
     return hosts
 
 
-def _normalize_host_config(host):
+def _normalize_disk_path(disk_path):
+    value = str(disk_path or "").strip()
+    return value or DEFAULT_DISK_PATH
+
+
+def _normalize_host_config(host, default_disk_path=DEFAULT_DISK_PATH):
     """Return a sanitized host config dict with stable keys."""
     alias = str(host.get("alias") or "").strip()
     hostname = str(host.get("hostname") or alias).strip()
@@ -165,14 +214,15 @@ def _normalize_host_config(host):
         "proxy_jump": str(host.get("proxy_jump") or "").strip() or None,
         "proxy_command": str(host.get("proxy_command") or "").strip() or None,
         "enabled": bool(host.get("enabled", True)),
+        "disk_path": _normalize_disk_path(host.get("disk_path", default_disk_path)),
     }
 
 
-def _dedupe_hosts(hosts):
+def _dedupe_hosts(hosts, default_disk_path=DEFAULT_DISK_PATH):
     deduped = []
     seen = set()
     for host in hosts:
-        normalized = _normalize_host_config(host)
+        normalized = _normalize_host_config(host, default_disk_path)
         alias = normalized["alias"]
         if not alias or alias in seen:
             continue
@@ -181,28 +231,45 @@ def _dedupe_hosts(hosts):
     return deduped
 
 
-def _config_payload(hosts, monitor_local=True):
+def _normalize_metrics(metrics):
+    source = metrics if isinstance(metrics, dict) else {}
+    return {key: bool(source.get(key, default)) for key, default in DEFAULT_METRICS.items()}
+
+
+def _config_payload(hosts, monitor_local=True, metrics=None, local_disk_path=DEFAULT_DISK_PATH):
     return {
         "version": 1,
         "imported_from_ssh": True,
         "ssh_config_path": SSH_CONFIG_PATH,
         "monitor_local": bool(monitor_local),
+        "metrics": _normalize_metrics(metrics),
+        "local_disk_path": _normalize_disk_path(local_disk_path),
         "hosts": _dedupe_hosts(hosts),
     }
 
 
-def save_server_config(hosts, monitor_local=True):
+def save_server_config(hosts, monitor_local=True, metrics=None, local_disk_path=DEFAULT_DISK_PATH):
     os.makedirs(os.path.dirname(SERVER_CONFIG_PATH), exist_ok=True)
     with open(SERVER_CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(_config_payload(hosts, monitor_local), f, indent=2)
+        json.dump(_config_payload(hosts, monitor_local, metrics, local_disk_path), f, indent=2)
 
 
 def load_config_payload():
     """Load full managed config payload, importing ~/.ssh/config on first run."""
     if not os.path.exists(SERVER_CONFIG_PATH):
         hosts = parse_ssh_config(SSH_CONFIG_PATH)
-        payload = _config_payload(hosts, monitor_local=True)
-        save_server_config(payload["hosts"], payload["monitor_local"])
+        payload = _config_payload(
+            hosts,
+            monitor_local=True,
+            metrics=DEFAULT_METRICS,
+            local_disk_path=DEFAULT_DISK_PATH,
+        )
+        save_server_config(
+            payload["hosts"],
+            payload["monitor_local"],
+            payload["metrics"],
+            payload["local_disk_path"],
+        )
         return payload
 
     try:
@@ -210,12 +277,16 @@ def load_config_payload():
             data = json.load(f)
     except (OSError, json.JSONDecodeError):
         data = {}
+    legacy_disk_path = data.get("disk_path", DEFAULT_DISK_PATH)
+    local_disk_path = data.get("local_disk_path", legacy_disk_path)
     return {
         "version": data.get("version", 1),
         "imported_from_ssh": data.get("imported_from_ssh", True),
         "ssh_config_path": data.get("ssh_config_path", SSH_CONFIG_PATH),
         "monitor_local": bool(data.get("monitor_local", True)),
-        "hosts": _dedupe_hosts(data.get("hosts", [])),
+        "metrics": _normalize_metrics(data.get("metrics")),
+        "local_disk_path": _normalize_disk_path(local_disk_path),
+        "hosts": _dedupe_hosts(data.get("hosts", []), default_disk_path=legacy_disk_path),
     }
 
 
@@ -228,6 +299,14 @@ def get_monitor_local():
     return load_config_payload()["monitor_local"]
 
 
+def get_metric_config():
+    return load_config_payload()["metrics"]
+
+
+def get_local_disk_path_config():
+    return load_config_payload()["local_disk_path"]
+
+
 def _host_endpoint_key(host):
     normalized = _normalize_host_config(host)
     hostname = (normalized.get("hostname") or normalized.get("alias") or "").lower()
@@ -237,15 +316,18 @@ def _host_endpoint_key(host):
 def import_ssh_hosts(replace=False):
     """Import hosts from SSH config into managed config."""
     imported = _dedupe_hosts(parse_ssh_config(SSH_CONFIG_PATH))
-    monitor_local = get_monitor_local()
+    payload = load_config_payload()
+    monitor_local = payload["monitor_local"]
+    metrics = payload["metrics"]
+    local_disk_path = payload["local_disk_path"]
     if replace:
-        save_server_config(imported, monitor_local)
+        save_server_config(imported, monitor_local, metrics, local_disk_path)
         return imported
 
     existing = load_server_config()
     endpoints = {_host_endpoint_key(h) for h in existing}
     merged = existing + [h for h in imported if _host_endpoint_key(h) not in endpoints]
-    save_server_config(merged, monitor_local)
+    save_server_config(merged, monitor_local, metrics, local_disk_path)
     return merged
 
 
@@ -435,6 +517,116 @@ def _attach_tpu_processes(gpus, proc_output):
         gpus[0]["processes"].append(proc)
 
 
+def _filter_system_metrics(system, metrics):
+    if not system:
+        return {}
+    filtered = {}
+    if metrics.get("cpu") and "cpu" in system:
+        filtered["cpu"] = system["cpu"]
+    if metrics.get("memory") and "memory" in system:
+        filtered["memory"] = system["memory"]
+    if metrics.get("disk") and "disk" in system:
+        filtered["disk"] = system["disk"]
+    return filtered
+
+
+def _parse_system_output(output):
+    try:
+        data = json.loads(output.strip() or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return {
+        key: data[key]
+        for key in ("cpu", "memory", "disk")
+        if isinstance(data.get(key), dict)
+    }
+
+
+def _query_remote_system(client, metrics, disk_path=DEFAULT_DISK_PATH):
+    if not (metrics.get("cpu") or metrics.get("memory") or metrics.get("disk")):
+        return {}
+    command = (
+        f"GNVITOP_DISK_PATH={shlex.quote(_normalize_disk_path(disk_path))} "
+        f"bash -c {shlex.quote(SYSTEM_CMD)}"
+    )
+    _, stdout, _ = client.exec_command(command, timeout=SSH_TIMEOUT)
+    return _filter_system_metrics(_parse_system_output(stdout.read().decode("utf-8")), metrics)
+
+
+def _read_local_cpu():
+    with open("/proc/stat", "r") as f:
+        parts1 = [int(x) for x in f.readline().split()[1:]]
+    time.sleep(0.2)
+    with open("/proc/stat", "r") as f:
+        parts2 = [int(x) for x in f.readline().split()[1:]]
+    idle1 = parts1[3] + (parts1[4] if len(parts1) > 4 else 0)
+    idle2 = parts2[3] + (parts2[4] if len(parts2) > 4 else 0)
+    total1 = sum(parts1)
+    total2 = sum(parts2)
+    total_delta = total2 - total1
+    idle_delta = idle2 - idle1
+    usage = 0 if total_delta <= 0 else (1 - idle_delta / total_delta) * 100
+    load1, load5, load15 = os.getloadavg()
+    return {
+        "usage_pct": round(usage, 1),
+        "cores": os.cpu_count() or 0,
+        "load1": round(load1, 2),
+        "load5": round(load5, 2),
+        "load15": round(load15, 2),
+    }
+
+
+def _read_local_memory():
+    vals = {}
+    with open("/proc/meminfo", "r") as f:
+        for line in f:
+            key, rest = line.split(":", 1)
+            vals[key] = int(rest.strip().split()[0]) * 1024
+    total = vals.get("MemTotal", 0)
+    available = vals.get("MemAvailable", 0)
+    used = max(total - available, 0)
+    return {
+        "total_bytes": total,
+        "used_bytes": used,
+        "available_bytes": available,
+        "usage_pct": round(used / total * 100, 1) if total else 0,
+    }
+
+
+def _read_local_disk(disk_path=DEFAULT_DISK_PATH):
+    import shutil
+    path = os.path.expanduser(_normalize_disk_path(disk_path))
+    usage = shutil.disk_usage(path)
+    return {
+        "mount": path,
+        "path": path,
+        "total_bytes": usage.total,
+        "used_bytes": usage.used,
+        "free_bytes": usage.free,
+        "usage_pct": round(usage.used / usage.total * 100, 1) if usage.total else 0,
+    }
+
+
+def query_local_system(metrics, disk_path=DEFAULT_DISK_PATH):
+    system = {}
+    if metrics.get("cpu"):
+        try:
+            system["cpu"] = _read_local_cpu()
+        except Exception:
+            pass
+    if metrics.get("memory"):
+        try:
+            system["memory"] = _read_local_memory()
+        except Exception:
+            pass
+    if metrics.get("disk"):
+        try:
+            system["disk"] = _read_local_disk(disk_path)
+        except Exception:
+            pass
+    return system
+
+
 def _make_ssh_client(hostname, port, user, identity_file, password=None, sock=None):
     """Create and connect a paramiko SSHClient."""
     client = paramiko.SSHClient()
@@ -461,7 +653,7 @@ def _make_ssh_client(hostname, port, user, identity_file, password=None, sock=No
     return client
 
 
-def query_gpu(host_info, hosts_by_alias=None):
+def query_gpu(host_info, hosts_by_alias=None, metrics=None):
     """SSH into a host and query GPU information (single round trip).
 
     hosts_by_alias: dict of alias -> host_info for resolving ProxyJump targets.
@@ -470,6 +662,8 @@ def query_gpu(host_info, hosts_by_alias=None):
     hostname = host_info["hostname"] or alias
     user = host_info["user"]
     port = host_info["port"]
+    metrics = _normalize_metrics(metrics)
+    disk_path = host_info.get("disk_path", DEFAULT_DISK_PATH)
 
     result = {
         "alias": alias,
@@ -479,6 +673,7 @@ def query_gpu(host_info, hosts_by_alias=None):
         "status": "error",
         "error": None,
         "gpus": [],
+        "system": {},
     }
 
     jump_client = None
@@ -513,6 +708,12 @@ def query_gpu(host_info, hosts_by_alias=None):
             hostname, port, user, host_info.get("identity_file"),
             host_info.get("password"), sock=sock,
         )
+
+        result["system"] = _query_remote_system(client, metrics, disk_path)
+        if not metrics.get("gpu"):
+            result["status"] = "ok"
+            client.close()
+            return result
 
         # Single exec_command for both GPU stats and process info
         # Wrap in bash -c to avoid issues with non-bash login shells (e.g. fish)
@@ -586,10 +787,11 @@ def _attach_processes(gpus, proc_output):
                 gpu_by_index[gpu_idx]["processes"].append(proc)
 
 
-def query_local_gpu():
+def query_local_gpu(metrics=None, disk_path=DEFAULT_DISK_PATH):
     """Query the local machine for GPU information (single subprocess call)."""
     import socket
 
+    metrics = _normalize_metrics(metrics)
     hostname = socket.gethostname()
     result = {
         "alias": "localhost",
@@ -599,8 +801,13 @@ def query_local_gpu():
         "status": "error",
         "error": None,
         "gpus": [],
+        "system": query_local_system(metrics, disk_path),
         "is_local": True,
     }
+
+    if not metrics.get("gpu"):
+        result["status"] = "ok"
+        return result
 
     try:
         output = subprocess.run(
@@ -695,6 +902,7 @@ def discover_gadi_nodes(hosts_by_alias):
                 "identity_file": info.get("identity_file"),
                 "password": info.get("password"),
                 "proxy_jump": alias,
+                "disk_path": info.get("disk_path", DEFAULT_DISK_PATH),
             })
 
     return discovered
@@ -702,7 +910,10 @@ def discover_gadi_nodes(hosts_by_alias):
 
 def fetch_all_gpu_info():
     """Query all hosts (local + remote) concurrently and return sorted results."""
-    monitor_local = get_monitor_local()
+    payload = load_config_payload()
+    monitor_local = payload["monitor_local"]
+    metrics = payload["metrics"]
+    local_disk_path = payload["local_disk_path"]
     hosts = [h for h in load_server_config() if h.get("enabled", True)]
     hosts_by_alias = {h["alias"]: h for h in hosts}
 
@@ -717,9 +928,9 @@ def fetch_all_gpu_info():
     with ThreadPoolExecutor(max_workers=20) as executor:
         futures = {}
         if monitor_local:
-            futures[executor.submit(query_local_gpu)] = None
+            futures[executor.submit(query_local_gpu, metrics, local_disk_path)] = None
         for h in hosts:
-            futures[executor.submit(query_gpu, h, hosts_by_alias)] = h
+            futures[executor.submit(query_gpu, h, hosts_by_alias, metrics)] = h
         for future in as_completed(futures):
             results.append(future.result())
 
@@ -792,6 +1003,8 @@ def api_config_hosts():
     return jsonify({
         "hosts": hosts,
         "monitor_local": payload["monitor_local"],
+        "metrics": payload["metrics"],
+        "local_disk_path": payload["local_disk_path"],
         "config_path": SERVER_CONFIG_PATH,
         "ssh_config_path": SSH_CONFIG_PATH,
     })
@@ -819,11 +1032,17 @@ def api_save_config_hosts():
         normalized.append(_normalize_host_config(merged))
 
     monitor_local = bool(payload.get("monitor_local", True))
-    save_server_config(normalized, monitor_local)
+    metrics = _normalize_metrics(payload.get("metrics"))
+    local_disk_path = _normalize_disk_path(
+        payload.get("local_disk_path", payload.get("disk_path", DEFAULT_DISK_PATH))
+    )
+    save_server_config(normalized, monitor_local, metrics, local_disk_path)
     _invalidate_cache()
     return jsonify({
         "hosts": [public_host_config(h) for h in load_server_config()],
         "monitor_local": get_monitor_local(),
+        "metrics": get_metric_config(),
+        "local_disk_path": get_local_disk_path_config(),
         "config_path": SERVER_CONFIG_PATH,
     })
 
@@ -836,6 +1055,8 @@ def api_import_ssh_config():
     return jsonify({
         "hosts": [public_host_config(h) for h in hosts],
         "monitor_local": get_monitor_local(),
+        "metrics": get_metric_config(),
+        "local_disk_path": get_local_disk_path_config(),
         "config_path": SERVER_CONFIG_PATH,
         "ssh_config_path": SSH_CONFIG_PATH,
     })
@@ -854,7 +1075,10 @@ def api_refresh():
 def api_stream():
     """SSE endpoint: streams each host result as it arrives, then a 'done' event."""
     def generate():
-        monitor_local = get_monitor_local()
+        payload = load_config_payload()
+        monitor_local = payload["monitor_local"]
+        metrics = payload["metrics"]
+        local_disk_path = payload["local_disk_path"]
         hosts = [h for h in load_server_config() if h.get("enabled", True)]
         hosts_by_alias = {h["alias"]: h for h in hosts}
         results = []
@@ -862,9 +1086,9 @@ def api_stream():
         with ThreadPoolExecutor(max_workers=20) as executor:
             futures = {}
             if monitor_local:
-                futures[executor.submit(query_local_gpu)] = None
+                futures[executor.submit(query_local_gpu, metrics, local_disk_path)] = None
             for h in hosts:
-                futures[executor.submit(query_gpu, h, hosts_by_alias)] = h
+                futures[executor.submit(query_gpu, h, hosts_by_alias, metrics)] = h
 
             for future in as_completed(futures):
                 host_result = future.result()

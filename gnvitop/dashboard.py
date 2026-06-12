@@ -283,6 +283,46 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   }
   .gpu-item + .gpu-item { border-top: 1px solid #1e293b; }
 
+  .system-panel {
+    padding: 12px 0;
+    border-bottom: 1px solid #1e293b;
+    margin-bottom: 4px;
+  }
+  .system-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #cbd5e1;
+    margin-bottom: 10px;
+  }
+  .system-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .system-metric {
+    background: #0f172a;
+    border-radius: 7px;
+    padding: 9px;
+  }
+  .system-metric-name {
+    color: #64748b;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 4px;
+  }
+  .system-metric-value {
+    color: #f1f5f9;
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .system-metric-sub {
+    color: #64748b;
+    font-size: 11px;
+    margin-top: 3px;
+  }
+
   .gpu-title {
     display: flex;
     justify-content: space-between;
@@ -742,6 +782,10 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     background: #f1f5f9;
     border-color: #60a5fa;
   }
+  .settings-path-input {
+    width: 170px;
+    max-width: 56%;
+  }
   .server-remove {
     border: none;
     background: transparent;
@@ -953,7 +997,10 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .folded-divider::after { background: var(--border); }
 
   .gpu-item + .gpu-item { border-top-color: var(--border); }
+  .system-panel { border-bottom-color: var(--border); }
   .gpu-name,
+  .system-title,
+  .system-metric-value,
   .settings-row,
   .settings-title,
   .server-card-title,
@@ -962,6 +1009,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .watch-btn .watch-tooltip { color: var(--text); }
   .bar-track,
   .stat,
+  .system-metric,
   .mode-toggle,
   .theme-toggle,
   .settings-close,
@@ -981,6 +1029,8 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .collapse-arrow,
   .watch-btn,
   .settings-section-title,
+  .system-metric-name,
+  .system-metric-sub,
   .server-field label,
   .server-empty,
   .server-save-status,
@@ -1140,6 +1190,47 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     </section>
 
     <section class="settings-section">
+      <div class="settings-section-title">Metrics</div>
+      <div class="settings-row">
+        <span>GPU</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="settings-metric-gpu" onchange="setMetricSetting('gpu', this.checked)" checked>
+          <span class="toggle-knob"></span>
+          <span class="toggle-label">GPU</span>
+        </label>
+      </div>
+      <div class="settings-row">
+        <span>CPU</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="settings-metric-cpu" onchange="setMetricSetting('cpu', this.checked)" checked>
+          <span class="toggle-knob"></span>
+          <span class="toggle-label">CPU</span>
+        </label>
+      </div>
+      <div class="settings-row">
+        <span>Memory</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="settings-metric-memory" onchange="setMetricSetting('memory', this.checked)" checked>
+          <span class="toggle-knob"></span>
+          <span class="toggle-label">Memory</span>
+        </label>
+      </div>
+      <div class="settings-row">
+        <span>Disk</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="settings-metric-disk" onchange="setMetricSetting('disk', this.checked)" checked>
+          <span class="toggle-knob"></span>
+          <span class="toggle-label">Disk</span>
+        </label>
+      </div>
+      <div class="settings-row">
+        <span>Local disk path</span>
+        <input class="server-input settings-path-input" id="settings-local-disk-path" value="~" placeholder="~, /, /data" oninput="setLocalDiskPath(this.value)" onblur="syncSettingsControls()" data-tip="Monitor the filesystem containing this path on localhost">
+      </div>
+      <div class="settings-note">Remote servers have separate disk paths in each server card. Use a path on the target partition, for example <code>~</code>, <code>/</code>, or <code>/data</code>.</div>
+    </section>
+
+    <section class="settings-section">
       <div class="settings-section-title">Servers</div>
       <div class="server-toolbar">
         <button class="settings-action" onclick="addServerConfig()">Add Server</button>
@@ -1197,6 +1288,8 @@ let hostOrder = JSON.parse(localStorage.getItem('gnvitop-order') || '[]'); // pi
 let currentTheme = localStorage.getItem('gnvitop-theme') || 'dark';
 let serverConfigs = [];
 let monitorLocal = true;
+let metricSettings = {gpu: true, cpu: true, memory: true, disk: true};
+let localDiskPath = '~';
 let serverSaveTimer = null;
 
 function setTheme(theme) {
@@ -1239,6 +1332,7 @@ function syncSettingsControls() {
   const sAuto = document.getElementById('settings-auto-refresh');
   const sInterval = document.getElementById('settings-interval-select');
   const sMonitorLocal = document.getElementById('settings-monitor-local');
+  const sLocalDiskPath = document.getElementById('settings-local-disk-path');
   if (stDark) stDark.classList.toggle('active', currentTheme === 'dark');
   if (stLight) stLight.classList.toggle('active', currentTheme === 'light');
   if (smCompact) smCompact.classList.toggle('active', currentMode === 'compact');
@@ -1248,6 +1342,11 @@ function syncSettingsControls() {
   if (sAuto && auto) sAuto.checked = auto.checked;
   if (sInterval) sInterval.value = String(refreshIntervalSecs);
   if (sMonitorLocal) sMonitorLocal.checked = monitorLocal;
+  if (sLocalDiskPath && document.activeElement !== sLocalDiskPath) sLocalDiskPath.value = localDiskPath || '~';
+  Object.keys(metricSettings).forEach(key => {
+    const el = document.getElementById('settings-metric-' + key);
+    if (el) el.checked = metricSettings[key] !== false;
+  });
   syncSettingsGlobalWatchBtn();
 }
 
@@ -1290,6 +1389,21 @@ async function setSettingsMonitorLocal(enabled) {
   scheduleServerConfigSave(0);
 }
 
+function setMetricSetting(metric, enabled) {
+  metricSettings[metric] = !!enabled;
+  const status = document.getElementById('server-save-status');
+  if (status) status.textContent = 'Saving metric setting...';
+  syncSettingsControls();
+  scheduleServerConfigSave(0);
+}
+
+function setLocalDiskPath(value) {
+  localDiskPath = value;
+  const status = document.getElementById('server-save-status');
+  if (status) status.textContent = 'Saving local disk path...';
+  scheduleServerConfigSave();
+}
+
 function syncSettingsGlobalWatchBtn() {
   const source = document.getElementById('global-watch-btn');
   const target = document.getElementById('settings-global-watch-btn');
@@ -1312,6 +1426,9 @@ async function loadServerConfigs() {
     const data = await resp.json();
     serverConfigs = data.hosts || [];
     monitorLocal = data.monitor_local !== false;
+    metricSettings = Object.assign({gpu: true, cpu: true, memory: true, disk: true}, data.metrics || {});
+    localDiskPath = data.local_disk_path || data.disk_path || '~';
+    syncSettingsControls();
     renderServerConfigs();
   } catch (e) {
     if (list) list.innerHTML = '<div class="server-empty">Failed to load server config.</div>';
@@ -1353,6 +1470,10 @@ function renderServerConfigs() {
           <input class="server-input" type="number" min="1" max="65535" value="${escapeHtml(host.port || 22)}" oninput="updateServerField(${idx}, 'port', this.value)">
         </div>
         <div class="server-field full">
+          <label>Disk Path</label>
+          <input class="server-input" value="${escapeHtml(host.disk_path || '~')}" placeholder="~, /, /data" oninput="updateServerField(${idx}, 'disk_path', this.value)">
+        </div>
+        <div class="server-field full">
           <label>Identity File</label>
           <input class="server-input" value="${escapeHtml(host.identity_file)}" placeholder="~/.ssh/id_rsa" oninput="updateServerField(${idx}, 'identity_file', this.value)">
         </div>
@@ -1391,6 +1512,7 @@ function addServerConfig() {
     proxy_jump: '',
     proxy_command: '',
     enabled: true,
+    disk_path: '~',
   });
   renderServerConfigs();
   const status = document.getElementById('server-save-status');
@@ -1420,6 +1542,7 @@ function serializeServerConfigs() {
       proxy_jump: host.proxy_jump || '',
       proxy_command: host.proxy_command || '',
       enabled: host.enabled !== false,
+      disk_path: host.disk_path || '~',
     };
     out.password = host.password ? host.password : (host.has_password ? '__KEEP__' : '');
     return out;
@@ -1440,12 +1563,14 @@ async function saveServerConfigs() {
     const resp = await fetch('/api/config/hosts', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({hosts: serializeServerConfigs(), monitor_local: monitorLocal}),
+      body: JSON.stringify({hosts: serializeServerConfigs(), monitor_local: monitorLocal, metrics: metricSettings, local_disk_path: localDiskPath}),
     });
     if (!resp.ok) throw new Error('Save failed');
     const data = await resp.json();
     serverConfigs = data.hosts || [];
     monitorLocal = data.monitor_local !== false;
+    metricSettings = Object.assign({gpu: true, cpu: true, memory: true, disk: true}, data.metrics || {});
+    localDiskPath = data.local_disk_path || data.disk_path || '~';
     renderServerConfigs();
     syncSettingsControls();
     if (status) status.textContent = 'Saved. Refreshing monitored hosts...';
@@ -1472,6 +1597,8 @@ async function importSshConfig(replace) {
     const data = await resp.json();
     serverConfigs = data.hosts || [];
     monitorLocal = data.monitor_local !== false;
+    metricSettings = Object.assign({gpu: true, cpu: true, memory: true, disk: true}, data.metrics || {});
+    localDiskPath = data.local_disk_path || data.disk_path || '~';
     renderServerConfigs();
     syncSettingsControls();
     if (status) status.textContent = 'Imported from SSH config. Refreshing monitored hosts...';
@@ -1722,6 +1849,63 @@ function formatMB(mb) {
   return mb.toFixed(0) + ' MB';
 }
 
+function formatBytes(bytes) {
+  if (bytes == null || isNaN(bytes)) return 'N/A';
+  const gb = bytes / (1024 * 1024 * 1024);
+  if (gb >= 1) return gb.toFixed(1) + ' GB';
+  const mb = bytes / (1024 * 1024);
+  return mb.toFixed(0) + ' MB';
+}
+
+function renderSystemMetric(name, pct, value, sub) {
+  const safePct = Math.max(0, Math.min(100, Number(pct) || 0));
+  return `
+    <div class="system-metric">
+      <div class="system-metric-name">${name}</div>
+      <div class="system-metric-value">${value}</div>
+      ${sub ? `<div class="system-metric-sub">${sub}</div>` : ''}
+      <div class="bar-track" style="margin-top:8px"><div class="bar-fill ${usageClass(safePct)}" style="width:${safePct}%"></div></div>
+    </div>
+  `;
+}
+
+function renderSystem(system) {
+  if (!system || (!system.cpu && !system.memory && !system.disk)) return '';
+  const items = [];
+  if (system.cpu) {
+    const c = system.cpu;
+    const sub = currentMode === 'compact'
+      ? `${c.cores || 0} cores`
+      : `${c.cores || 0} cores · load ${c.load1 ?? 'N/A'} / ${c.load5 ?? 'N/A'} / ${c.load15 ?? 'N/A'}`;
+    items.push(renderSystemMetric('CPU', c.usage_pct, `${c.usage_pct ?? 0}%`, sub));
+  }
+  if (system.memory) {
+    const m = system.memory;
+    const sub = currentMode === 'compact'
+      ? `${formatBytes(m.available_bytes)} free`
+      : `${formatBytes(m.used_bytes)} used / ${formatBytes(m.total_bytes)}`;
+    items.push(renderSystemMetric('Memory', m.usage_pct, `${m.usage_pct ?? 0}%`, sub));
+  }
+  if (system.disk) {
+    const d = system.disk;
+    const sub = currentMode === 'compact'
+      ? `${formatBytes(d.free_bytes)} free`
+      : `${formatBytes(d.used_bytes)} used / ${formatBytes(d.total_bytes)} on ${d.mount || d.path || '~'}`;
+    items.push(renderSystemMetric('Disk', d.usage_pct, `${d.usage_pct ?? 0}%`, sub));
+  }
+  if (!items.length) return '';
+  return `<div class="system-panel"><div class="system-title">System</div><div class="system-grid">${items.join('')}</div></div>`;
+}
+
+function compactSystemText(system) {
+  if (!system) return '';
+  const parts = [];
+  if (system.cpu) parts.push(`CPU ${system.cpu.usage_pct ?? 0}%`);
+  if (system.memory) parts.push(`Mem ${system.memory.usage_pct ?? 0}%`);
+  if (system.disk) parts.push(`Disk ${system.disk.usage_pct ?? 0}%`);
+  return parts.join(' · ');
+}
+
 function renderSummary(hosts) {
   const online = hosts.filter(h => h.status === 'ok');
   const totalGPUs = online.reduce((s, h) => s + h.gpus.length, 0);
@@ -1840,7 +2024,9 @@ function renderHosts(hosts) {
     return;
   }
 
-  let filtered = currentMode === 'compact' ? hosts.filter(h => h.status === 'ok') : hosts;
+  let filtered = currentMode === 'compact'
+    ? hosts.filter(h => h.status === 'ok' || (h.system && Object.keys(h.system).length))
+    : hosts;
 
   // Apply manual drag order if set, otherwise auto-sort
   if (hostOrder.length) {
@@ -1868,12 +2054,14 @@ function renderHosts(hosts) {
 
   function renderCard(host) {
     let body = '';
+    const systemHtml = renderSystem(host.system);
     if (host.status === 'ok') {
-      body = host.gpus.map(g => renderGPU(g, host.user)).join('');
+      const gpuHtml = (host.gpus || []).map(g => renderGPU(g, host.user)).join('');
+      body = systemHtml + gpuHtml;
     } else if (host.status === 'no_gpu') {
-      body = `<div class="no-gpu-msg">${host.error || 'No NVIDIA GPU detected'}</div>`;
+      body = systemHtml + `<div class="no-gpu-msg">${host.error || 'No NVIDIA GPU detected'}</div>`;
     } else {
-      body = `<div class="error-msg">${host.error || 'Unknown error'}</div>`;
+      body = systemHtml + `<div class="error-msg">${host.error || 'Unknown error'}</div>`;
     }
     const isLocal    = host.is_local;
     const isTpu      = !!host.is_tpu;
@@ -1886,6 +2074,9 @@ function renderHosts(hosts) {
         ? `<div class="collapsed-info">${host.gpus.length} chip${host.gpus.length !== 1 ? 's' : ''} &nbsp;·&nbsp; ${formatMB(host.gpus[0].memory_total_mb * host.gpus.length)} HBM</div>`
         : `<div class="collapsed-info">${host.gpus.length} GPU${host.gpus.length !== 1 ? 's' : ''} &nbsp;·&nbsp; Free: ${formatMB(host.gpus.reduce((s, g) => s + g.memory_free_mb, 0))}</div>`
       : '';
+    const fallbackCollapsedInfo = (isCollapsed && !collapsedInfo && compactSystemText(host.system))
+      ? `<div class="collapsed-info">${compactSystemText(host.system)}</div>`
+      : '';
     const alias = host.alias.replace(/'/g, "\\'");
     return `
       <div class="${cardClass}" data-alias="${alias}">
@@ -1895,7 +2086,7 @@ function renderHosts(hosts) {
             <div>
               <div class="host-name">${host.alias}</div>
               <div class="host-info">${host.user}@${host.hostname}${host.port ? ':' + host.port : ''}</div>
-              ${collapsedInfo}
+              ${collapsedInfo || fallbackCollapsedInfo}
             </div>
           </div>
           <div class="host-header-right">
