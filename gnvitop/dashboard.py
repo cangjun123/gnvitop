@@ -756,6 +756,21 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .server-test-status.warn { color: var(--warning-text); }
   .server-test-status.fail { color: var(--error-text); }
   .pw-label { min-height: 12px; }
+  .tunnel-field {
+    border-top: 1px dashed var(--border);
+    padding-top: 10px;
+    margin-top: 4px;
+  }
+  .tunnel-port-input { width: 90px; }
+  .tunnel-status {
+    font-size: 12px;
+    margin-top: 6px;
+    color: var(--text-subtle);
+    min-height: 14px;
+    word-break: break-all;
+  }
+  .tunnel-status.ok { color: var(--success-text); }
+  .tunnel-status.fail { color: var(--error-text); }
   .server-card-title {
     font-weight: 700;
     color: #f1f5f9;
@@ -1543,6 +1558,42 @@ function toggleSettings(open) {
   syncSettingsControls();
   if (open && !serverConfigs.length) loadServerConfigs();
   overlay.classList.toggle('open', !!open);
+  if (open) {
+    refreshTunnelStatuses();
+    if (!tunnelStatusTimer) tunnelStatusTimer = setInterval(refreshTunnelStatuses, 3000);
+  } else if (tunnelStatusTimer) {
+    clearInterval(tunnelStatusTimer);
+    tunnelStatusTimer = null;
+  }
+}
+
+let tunnelStatusTimer = null;
+async function refreshTunnelStatuses() {
+  try {
+    const resp = await fetch('/api/tunnels');
+    const data = await resp.json();
+    document.querySelectorAll('.tunnel-status').forEach(el => {
+      const idx = parseInt(el.dataset.tunnelIndex, 10);
+      const host = serverConfigs[idx];
+      if (!host) { el.textContent = ''; el.className = 'tunnel-status'; return; }
+      const st = (data.tunnels || {})[host.alias];
+      if (!host.tunnel_enabled || !st) { el.textContent = ''; el.className = 'tunnel-status'; return; }
+      const port = st.port || host.tunnel_port || 7890;
+      if (st.status === 'running') {
+        el.textContent = '运行中：' + (host.hostname || host.alias) + ':' + port + ' → 本机:' + port;
+        el.className = 'tunnel-status ok';
+      } else if (st.status === 'reconnecting') {
+        el.textContent = '重连中：' + (st.error || '未知原因');
+        el.className = 'tunnel-status fail';
+      } else if (st.status === 'starting') {
+        el.textContent = '连接中…';
+        el.className = 'tunnel-status';
+      } else {
+        el.textContent = '已停止';
+        el.className = 'tunnel-status';
+      }
+    });
+  } catch (e) {}
 }
 
 let _overlayMouseDown = false;
@@ -1763,6 +1814,18 @@ function renderServerConfigs() {
           <label>ProxyCommand</label>
           <input class="server-input" value="${escapeHtml(host.proxy_command)}" oninput="updateServerField(${idx}, 'proxy_command', this.value)">
         </div>
+        <div class="server-field full tunnel-field">
+          <label data-tip="在服务器上监听该端口，经 SSH 隧道转发到本机同端口（相当于 ssh -R）。本机需有对应服务，如 7890 代理">端口映射（服务器 → 本机）</label>
+          <div class="server-metrics">
+            <label class="toggle-switch">
+              <input type="checkbox" ${host.tunnel_enabled ? 'checked' : ''} onchange="updateServerField(${idx}, 'tunnel_enabled', this.checked)">
+              <span class="toggle-knob"></span>
+              <span class="toggle-label">启用</span>
+            </label>
+            <input class="server-input tunnel-port-input" type="number" min="1" max="65535" value="${host.tunnel_port || 7890}" oninput="updateServerField(${idx}, 'tunnel_port', this.value)" data-tip="服务器上监听的端口，默认 7890">
+          </div>
+          <div class="tunnel-status" data-tunnel-index="${idx}"></div>
+        </div>
       </div>
     </div>
   `).join('');
@@ -1864,6 +1927,8 @@ function serializeServerConfig(host) {
     enabled: host.enabled !== false,
     disk_path: host.disk_path || '~',
     metrics: normalizeMetricConfig(host.metrics || metricSettings),
+    tunnel_enabled: host.tunnel_enabled === true,
+    tunnel_port: parseInt(host.tunnel_port || 7890),
   };
   out.password = host.password ? host.password : (host.has_password ? '__KEEP__' : '');
   return out;

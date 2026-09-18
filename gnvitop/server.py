@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shlex
+import socket
 import subprocess
 import time
 import threading
@@ -30,6 +31,7 @@ PASSWORD_ENC_PREFIX = "gnv1:"
 HISTORY_PATH = os.path.expanduser("~/.gnvitop/history.jsonl")
 SSH_TIMEOUT = 45
 DEFAULT_DISK_PATH = "~"
+DEFAULT_TUNNEL_PORT = 7890
 HISTORY_RETENTION_SECONDS = 7 * 24 * 60 * 60
 HISTORY_PRUNE_INTERVAL = 60 * 60
 HISTORY_MAX_POINTS = 1200
@@ -218,6 +220,11 @@ def _normalize_host_config(host, default_disk_path=DEFAULT_DISK_PATH, default_me
         port = int(host.get("port") or 22)
     except (TypeError, ValueError):
         port = 22
+    try:
+        tunnel_port = int(host.get("tunnel_port") or DEFAULT_TUNNEL_PORT)
+    except (TypeError, ValueError):
+        tunnel_port = DEFAULT_TUNNEL_PORT
+    tunnel_port = min(max(tunnel_port, 1), 65535)
     identity_file = host.get("identity_file") or None
     if identity_file:
         identity_file = os.path.expanduser(str(identity_file))
@@ -234,6 +241,8 @@ def _normalize_host_config(host, default_disk_path=DEFAULT_DISK_PATH, default_me
         "enabled": bool(host.get("enabled", True)),
         "disk_path": _normalize_disk_path(host.get("disk_path", default_disk_path)),
         "metrics": _normalize_metrics(host_metrics if host_metrics is not None else default_metrics),
+        "tunnel_enabled": bool(host.get("tunnel_enabled", False)),
+        "tunnel_port": tunnel_port,
     }
 
 
@@ -999,15 +1008,21 @@ def _make_ssh_client(hostname, port, user, identity_file, password=None, sock=No
         if os.name == "nt":
             ssh_exe = _win_ssh_exe()
             if ssh_exe:
+                pipe = None
                 try:
                     pipe = _NativeSshPipe(ssh_exe, hostname, port, user, identity_file, password)
                     return _connect(pipe)
                 except paramiko.AuthenticationException as fallback_error:
                     # The transport worked but credentials didn't — report
                     # that instead of the transport-level original error.
+                    if pipe is not None:
+                        pipe.close()
                     raise fallback_error
                 except Exception:
-                    pass  # fallback also failed at transport level
+                    # Fallback also failed at transport level — clean up the
+                    # ssh.exe child so it doesn't linger as an orphan process.
+                    if pipe is not None:
+                        pipe.close()
         raise original_error
 
 
@@ -1434,6 +1449,184 @@ def fetch_all_gpu_info():
     return _sort_results(list(iter_gpu_results()))
 
 
+def _tunnel_signature(host):
+    """Connection-relevant fields of a host config; changes force a restart."""
+    return (
+        host.get("hostname") or host.get("alias"),
+        host.get("port", 22),
+        host.get("user"),
+        host.get("tunnel_port") or DEFAULT_TUNNEL_PORT,
+        host.get("identity_file"),
+        bool(host.get("password")),
+    )
+
+
+def _bridge_channel(chan, target):
+    """Bridge a reverse-forwarded SSH channel to a local TCP socket."""
+    try:
+        sock = socket.create_connection(target, timeout=15)
+    except OSError:
+        try:
+            chan.close()
+        except Exception:
+            pass
+        return
+
+    def relay(src, dst):
+        try:
+            while True:
+                data = src.recv(4096)
+                if not data:
+                    break
+                dst.sendall(data)
+        except Exception:
+            pass
+        finally:
+            try:
+                dst.shutdown(socket.SHUT_WR)
+            except Exception:
+                pass
+
+    def wait_and_close():
+        for t in threads:
+            t.join()
+        try:
+            chan.close()
+        except Exception:
+            pass
+        try:
+            sock.close()
+        except Exception:
+            pass
+
+    threads = [
+        threading.Thread(target=relay, args=(chan, sock), daemon=True),
+        threading.Thread(target=relay, args=(sock, chan), daemon=True),
+    ]
+    for t in threads:
+        t.start()
+    threading.Thread(target=wait_and_close, daemon=True).start()
+
+
+class TunnelManager:
+    """Maintains persistent reverse SSH tunnels (server:port -> local:port).
+
+    Equivalent to `ssh -R <port>:127.0.0.1:<port>` per host: the server
+    listens on the port and traffic is forwarded to the same port on the
+    machine running gnvitop (e.g. a local proxy on 7890).
+    """
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._tunnels = {}  # alias -> state dict
+
+    def sync(self, hosts):
+        """Start tunnels for enabled hosts with tunnel_enabled; stop the rest."""
+        wanted = {}
+        for h in hosts:
+            if h.get("enabled", True) and h.get("tunnel_enabled"):
+                wanted[h["alias"]] = h
+        with self._lock:
+            for alias, state in list(self._tunnels.items()):
+                host = wanted.get(alias)
+                if host is None or state["signature"] != _tunnel_signature(host):
+                    self._stop_locked(alias)
+            for alias, host in wanted.items():
+                if alias not in self._tunnels:
+                    state = {
+                        "host": dict(host),
+                        "signature": _tunnel_signature(host),
+                        "stop": threading.Event(),
+                        "client": None,
+                        "thread": None,
+                        "status": "starting",
+                        "error": None,
+                    }
+                    state["thread"] = threading.Thread(
+                        target=self._run, args=(state,), daemon=True)
+                    self._tunnels[alias] = state
+                    state["thread"].start()
+
+    def _stop_locked(self, alias):
+        state = self._tunnels.pop(alias)
+        state["stop"].set()
+        client = state.get("client")
+        if client is not None:
+            try:
+                client.close()
+            except Exception:
+                pass
+
+    def _run(self, state):
+        backoff = 5
+        while not state["stop"].is_set():
+            host = state["host"]
+            port = host.get("tunnel_port") or DEFAULT_TUNNEL_PORT
+            client = None
+            try:
+                client = _make_ssh_client(
+                    host.get("hostname") or host.get("alias"),
+                    host.get("port", 22),
+                    host.get("user"),
+                    host.get("identity_file"),
+                    host.get("password"),
+                )
+                state["client"] = client
+                transport = client.get_transport()
+                transport.set_keepalive(30)
+                transport.request_port_forward("127.0.0.1", port)
+                state["status"] = "running"
+                state["error"] = None
+                while not state["stop"].is_set() and transport.is_active():
+                    chan = transport.accept(1.0)
+                    if chan is None:
+                        continue
+                    threading.Thread(
+                        target=_bridge_channel,
+                        args=(chan, ("127.0.0.1", port)),
+                        daemon=True,
+                    ).start()
+                if not state["stop"].is_set():
+                    state["status"] = "reconnecting"
+                    state["error"] = "连接断开"
+            except Exception as e:
+                state["status"] = "reconnecting"
+                state["error"] = f"{type(e).__name__}: {e}"
+                if "forwarding request denied" in str(e):
+                    state["error"] += f"（端口 {port} 可能已被占用，例如手动开启的 SSH 会话）"
+            finally:
+                state["client"] = None
+                if client is not None:
+                    try:
+                        transport = client.get_transport()
+                        if transport is not None:
+                            transport.cancel_port_forward("127.0.0.1", port)
+                    except Exception:
+                        pass
+                    try:
+                        client.close()
+                    except Exception:
+                        pass
+            if state["stop"].wait(backoff):
+                break
+            backoff = min(backoff * 2, 60)
+        state["status"] = "stopped"
+
+    def statuses(self):
+        with self._lock:
+            return {
+                alias: {
+                    "status": st["status"],
+                    "port": st["host"].get("tunnel_port") or DEFAULT_TUNNEL_PORT,
+                    "error": st["error"],
+                }
+                for alias, st in self._tunnels.items()
+            }
+
+
+tunnel_manager = TunnelManager()
+
+
 def _do_background_refresh():
     """Run fetch_all_gpu_info and update cache; reset _bg_refresh_running flag when done."""
     global _bg_refresh_running
@@ -1535,6 +1728,7 @@ def api_save_config_hosts():
 
     save_server_config(normalized, monitor_local, metrics, local_disk_path)
     _invalidate_cache()
+    tunnel_manager.sync(load_server_config())
     return jsonify({
         "hosts": [public_host_config(h) for h in load_server_config()],
         "monitor_local": get_monitor_local(),
@@ -1542,6 +1736,11 @@ def api_save_config_hosts():
         "local_disk_path": get_local_disk_path_config(),
         "config_path": SERVER_CONFIG_PATH,
     })
+
+
+@app.route("/api/tunnels")
+def api_tunnels():
+    return jsonify({"tunnels": tunnel_manager.statuses()})
 
 
 @app.route("/api/config/export", methods=["GET"])
@@ -1563,6 +1762,7 @@ def api_import_config():
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     _invalidate_cache()
+    tunnel_manager.sync(load_server_config())
     saved = load_config_payload()
     return jsonify({
         "hosts": [public_host_config(h) for h in saved["hosts"]],
@@ -1578,6 +1778,7 @@ def api_import_ssh_config():
     payload = request.get_json(silent=True) or {}
     hosts = import_ssh_hosts(replace=bool(payload.get("replace")))
     _invalidate_cache()
+    tunnel_manager.sync(load_server_config())
     return jsonify({
         "hosts": [public_host_config(h) for h in hosts],
         "monitor_local": get_monitor_local(),

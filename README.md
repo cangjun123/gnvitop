@@ -131,6 +131,7 @@ Host tpu-v4-8
 - **TPU support** — detects Google Cloud TPU chips via `/dev/accel*`, shows chip count and HBM spec (v4: 32 GB/chip); utilization shown as N/A until `torch_xla` is installed
 - **MetaX support** — parses `mx-smi` output for MetaX C500 and compatible GPUs
 - **Gadi NCI support** — SSHes into Gadi login nodes and auto-discovers allocated GPU compute nodes via `qstat`
+- **Port tunnels** — per-server reverse port forwarding (e.g. map each server's port 7890 to your local proxy, equivalent to `ssh -R`), with auto-reconnect and live status in settings
 - **ProxyJump support** — monitors compute nodes behind bastion/jump hosts
 - **Per-GPU users** — shows which users occupy each GPU and their memory usage
 - **User highlight** — your own processes are highlighted in blue for quick identification
