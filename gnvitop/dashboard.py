@@ -735,6 +735,27 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     gap: 10px;
     margin-bottom: 10px;
   }
+  .server-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .server-test {
+    color: var(--local-text);
+  }
+  .server-test:disabled { opacity: 0.5; cursor: wait; }
+  .server-test-status {
+    display: none;
+    font-size: 12px;
+    line-height: 1.45;
+    margin: -4px 0 10px;
+  }
+  .server-test-status:not(:empty) { display: block; }
+  .server-test-status.ok { color: var(--success-text); }
+  .server-test-status.warn { color: var(--warning-text); }
+  .server-test-status.fail { color: var(--error-text); }
+  .pw-label { min-height: 12px; }
   .server-card-title {
     font-weight: 700;
     color: #f1f5f9;
@@ -784,6 +805,10 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     background: #f8fafc;
     color: #1e293b;
     border-color: #cbd5e1;
+  }
+  html.theme-light .server-test {
+    color: var(--local-text);
+    background: #f8fafc;
   }
   html.theme-light .server-input::placeholder {
     color: var(--text-subtle);
@@ -1294,7 +1319,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   </div>
 </div>
 
-<div class="settings-overlay" id="settings-overlay" onclick="closeSettingsOnBackdrop(event)">
+<div class="settings-overlay" id="settings-overlay" onmousedown="overlayMouseDown(event)" onclick="closeSettingsOnBackdrop(event)">
   <aside class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
     <div class="settings-head">
       <div>
@@ -1418,7 +1443,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
         <button class="settings-action" onclick="selectConfigImportFile()">导入配置</button>
       </div>
       <input class="hidden-file-input" id="config-import-file" type="file" accept="application/json,.json" onchange="importConfigFile(this.files[0]); this.value='';">
-      <div class="settings-note">服务器配置独立于 SSH 配置保存。修改会自动保存。密码保存在本地 gnvitop 配置文件中，导出的配置文件也会包含密码。</div>
+      <div class="settings-note">服务器配置独立于 SSH 配置保存。修改会自动保存。密码保存在本地 gnvitop 配置文件中，保存后会用本地密钥加密存储；导出的配置文件仍包含可用的密码。</div>
       <div class="server-save-status" id="server-save-status"></div>
       <div class="server-list" id="server-list">
         <div class="server-empty">正在加载服务器配置...</div>
@@ -1427,7 +1452,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   </aside>
 </div>
 
-<div class="history-overlay" id="history-overlay" onclick="closeHistoryOnBackdrop(event)">
+<div class="history-overlay" id="history-overlay" onmousedown="overlayMouseDown(event)" onclick="closeHistoryOnBackdrop(event)">
   <div class="history-modal" onclick="event.stopPropagation()">
     <div class="history-head">
       <div>
@@ -1520,8 +1545,15 @@ function toggleSettings(open) {
   overlay.classList.toggle('open', !!open);
 }
 
+let _overlayMouseDown = false;
+function overlayMouseDown(event) {
+  _overlayMouseDown = event.target.id === 'settings-overlay' || event.target.id === 'history-overlay';
+}
 function closeSettingsOnBackdrop(event) {
-  if (event.target.id === 'settings-overlay') toggleSettings(false);
+  // Only close on a real click that started on the backdrop itself —
+  // not when a text selection begun inside the panel is released outside it.
+  if (_overlayMouseDown && event.target.id === 'settings-overlay') toggleSettings(false);
+  _overlayMouseDown = false;
 }
 
 document.addEventListener('keydown', event => {
@@ -1594,7 +1626,7 @@ async function setSettingsMonitorLocal(enabled) {
   const status = document.getElementById('server-save-status');
   if (status) status.textContent = '正在保存本机监控设置...';
   syncSettingsControls();
-  scheduleServerConfigSave(0);
+  scheduleServerConfigSaveNow();
 }
 
 function setMetricSetting(metric, enabled) {
@@ -1602,14 +1634,14 @@ function setMetricSetting(metric, enabled) {
   const status = document.getElementById('server-save-status');
   if (status) status.textContent = '正在保存指标设置...';
   syncSettingsControls();
-  scheduleServerConfigSave(0);
+  scheduleServerConfigSaveNow();
 }
 
 function setLocalDiskPath(value) {
   localDiskPath = value;
   const status = document.getElementById('server-save-status');
   if (status) status.textContent = '正在保存本机磁盘路径...';
-  scheduleServerConfigSave();
+  scheduleServerConfigSaveNow();
 }
 
 function syncSettingsGlobalWatchBtn() {
@@ -1687,8 +1719,12 @@ function renderServerConfigs() {
           <span class="toggle-knob"></span>
           <span class="server-card-title">${escapeHtml(host.alias || '新服务器')}</span>
         </label>
-        <button class="server-remove" onclick="removeServerConfig(${idx})">移除</button>
+        <div class="server-head-actions">
+          <button class="settings-action server-test" onclick="testServerConfig(${idx})" data-tip="测试 SSH 连接并检测 GPU">测试</button>
+          <button class="server-remove" onclick="removeServerConfig(${idx})">移除</button>
+        </div>
       </div>
+      <div class="server-test-status"></div>
       <div class="server-grid">
         <div class="server-field">
           <label>别名</label>
@@ -1716,8 +1752,8 @@ function renderServerConfigs() {
           <input class="server-input" value="${escapeHtml(host.identity_file)}" placeholder="~/.ssh/id_rsa" oninput="updateServerField(${idx}, 'identity_file', this.value)">
         </div>
         <div class="server-field full">
-          <label>密码 ${host.has_password ? '（已保存，留空则保留）' : '（可选）'}</label>
-          <input class="server-input" type="password" value="" placeholder="${host.has_password ? '保留已有密码' : '密码'}" oninput="updateServerField(${idx}, 'password', this.value)">
+          <label class="pw-label">密码 ${host.has_password ? '（已保存，留空则保留）' : '（可选）'}</label>
+          <input class="server-input pw-input" type="password" value="" placeholder="${host.has_password ? '保留已有密码' : '密码'}" oninput="updateServerField(${idx}, 'password', this.value)">
         </div>
         <div class="server-field">
           <label>ProxyJump</label>
@@ -1735,7 +1771,44 @@ function renderServerConfigs() {
 function updateServerField(index, field, value) {
   if (!serverConfigs[index]) return;
   serverConfigs[index][field] = field === 'enabled' ? !!value : value;
-  scheduleServerConfigSave();
+  scheduleServerConfigSaveNow();
+}
+
+async function testServerConfig(index) {
+  const host = serverConfigs[index];
+  if (!host) return;
+  const card = document.querySelector('#server-list .server-card[data-index="' + index + '"]');
+  const button = card ? card.querySelector('.server-test') : null;
+  const statusEl = card ? card.querySelector('.server-test-status') : null;
+  if (button) { button.disabled = true; button.textContent = '测试中...'; }
+  if (statusEl) { statusEl.className = 'server-test-status'; statusEl.textContent = '正在连接 ' + (host.hostname || host.alias) + ' ...'; }
+  try {
+    const resp = await fetch('/api/config/test', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({host: serializeServerConfig(host)}),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(data.error || '测试请求失败');
+    if (!statusEl) return;
+    if (data.status === 'ok') {
+      const count = (data.gpus || []).length;
+      const unit = data.is_tpu ? ' TPU chip' : ' GPU';
+      const first = data.gpus && data.gpus[0] ? data.gpus[0].name : '';
+      statusEl.textContent = '连接成功 · ' + count + unit + (count !== 1 ? 's' : '') + (first ? ' · ' + first : '');
+      statusEl.classList.add('ok');
+    } else if (data.status === 'no_gpu') {
+      statusEl.textContent = '连接成功，但未检测到加速器：' + (data.error || '未知原因');
+      statusEl.classList.add('warn');
+    } else {
+      statusEl.textContent = '连接失败：' + (data.error || '未知错误');
+      statusEl.classList.add('fail');
+    }
+  } catch (e) {
+    if (statusEl) { statusEl.textContent = '测试失败：' + e.message; statusEl.classList.add('fail'); }
+  } finally {
+    if (button) { button.disabled = false; button.textContent = '测试'; }
+  }
 }
 
 function updateServerMetric(index, metric, enabled) {
@@ -1744,7 +1817,7 @@ function updateServerMetric(index, metric, enabled) {
   serverConfigs[index].metrics[metric] = !!enabled;
   const status = document.getElementById('server-save-status');
   if (status) status.textContent = '正在保存服务器指标设置...';
-  scheduleServerConfigSave(0);
+  scheduleServerConfigSaveNow();
 }
 
 function addServerConfig() {
@@ -1765,7 +1838,7 @@ function addServerConfig() {
   renderServerConfigs();
   const status = document.getElementById('server-save-status');
   if (status) status.textContent = '已添加服务器，正在自动保存...';
-  scheduleServerConfigSave(0);
+  scheduleServerConfigSaveNow();
 }
 
 function removeServerConfig(index) {
@@ -1776,63 +1849,129 @@ function removeServerConfig(index) {
   renderServerConfigs();
   const status = document.getElementById('server-save-status');
   if (status) status.textContent = '已移除服务器，正在自动保存...';
-  scheduleServerConfigSave(0);
+  scheduleServerConfigSaveNow();
+}
+
+function serializeServerConfig(host) {
+  const out = {
+    alias: host.alias || '',
+    hostname: host.hostname || '',
+    user: host.user || '',
+    port: parseInt(host.port || 22),
+    identity_file: host.identity_file || '',
+    proxy_jump: host.proxy_jump || '',
+    proxy_command: host.proxy_command || '',
+    enabled: host.enabled !== false,
+    disk_path: host.disk_path || '~',
+    metrics: normalizeMetricConfig(host.metrics || metricSettings),
+  };
+  out.password = host.password ? host.password : (host.has_password ? '__KEEP__' : '');
+  return out;
 }
 
 function serializeServerConfigs() {
-  return serverConfigs.map(host => {
-    const out = {
-      alias: host.alias || '',
-      hostname: host.hostname || '',
-      user: host.user || '',
-      port: parseInt(host.port || 22),
-      identity_file: host.identity_file || '',
-      proxy_jump: host.proxy_jump || '',
-      proxy_command: host.proxy_command || '',
-      enabled: host.enabled !== false,
-      disk_path: host.disk_path || '~',
-      metrics: normalizeMetricConfig(host.metrics || metricSettings),
-    };
-    out.password = host.password ? host.password : (host.has_password ? '__KEEP__' : '');
-    return out;
-  });
+  return serverConfigs.map(serializeServerConfig);
 }
 
 function scheduleServerConfigSave(delay = 700) {
   clearTimeout(serverSaveTimer);
   const status = document.getElementById('server-save-status');
   if (status) status.textContent = delay ? '有未保存的修改，正在自动保存...' : '正在保存...';
-  serverSaveTimer = setTimeout(saveServerConfigs, delay);
+  serverSaveTimer = setTimeout(() => {
+    serverSaveTimer = null;
+    saveServerConfigs();
+  }, delay);
 }
 
-async function saveServerConfigs() {
+function scheduleServerConfigSaveNow() {
+  // Preserve focus and in-progress edits: save silently, don't re-render the list.
+  clearTimeout(serverSaveTimer);
+  serverSaveTimer = null;
+  const focusInfo = captureServerInputFocus();
+  const status = document.getElementById('server-save-status');
+  if (status) status.textContent = '正在保存...';
+  fetch('/api/config/hosts', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({hosts: serializeServerConfigs(), monitor_local: monitorLocal, metrics: metricSettings, local_disk_path: localDiskPath}),
+  })
+    .then(resp => {
+      if (!resp.ok) throw new Error('保存失败');
+      return resp.json();
+    })
+    .then(data => {
+      serverConfigs = data.hosts || [];
+      monitorLocal = data.monitor_local !== false;
+      metricSettings = normalizeMetricConfig(data.metrics);
+      localDiskPath = data.local_disk_path || data.disk_path || '~';
+      syncSettingsControls();
+      if (status) status.textContent = '已保存。';
+      restoreServerInputFocus(focusInfo);
+    })
+    .catch(e => {
+      if (status) status.textContent = '保存失败：' + e.message;
+    });
+}
+
+function captureServerInputFocus() {
+  const el = document.activeElement;
+  if (!el || !el.classList || !el.classList.contains('server-input')) return null;
+  const card = el.closest('.server-card');
+  if (!card) return null;
+  const field = el.parentElement.querySelector('label');
+  const fields = card.querySelectorAll('.server-field');
+  let fieldIndex = -1;
+  fields.forEach((f, i) => { if (f.contains(el)) fieldIndex = i; });
+  const input = fields[fieldIndex] ? fields[fieldIndex].querySelector('.server-input') : null;
+  const pos = el.selectionStart != null ? el.selectionStart : (input ? input.value.length : 0);
+  return {index: parseInt(card.dataset.index), fieldIndex, selectionStart: pos, selectionEnd: el.selectionEnd != null ? el.selectionEnd : pos};
+}
+
+function restoreServerInputFocus(focusInfo) {
+  if (!focusInfo) return;
+  const card = document.querySelector('#server-list .server-card[data-index="' + focusInfo.index + '"]');
+  if (!card) return;
+  const fields = card.querySelectorAll('.server-field');
+  const field = fields[focusInfo.fieldIndex];
+  const input = field ? field.querySelector('.server-input') : null;
+  if (!input) return;
+  input.focus();
+  try {
+    input.setSelectionRange(focusInfo.selectionStart, focusInfo.selectionEnd);
+  } catch (e) {}
+}
+
+function saveServerConfigs() {
   if (serverSaveTimer) {
     clearTimeout(serverSaveTimer);
     serverSaveTimer = null;
   }
   const status = document.getElementById('server-save-status');
   if (status) status.textContent = '正在保存...';
-  try {
-    const resp = await fetch('/api/config/hosts', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({hosts: serializeServerConfigs(), monitor_local: monitorLocal, metrics: metricSettings, local_disk_path: localDiskPath}),
+  return fetch('/api/config/hosts', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({hosts: serializeServerConfigs(), monitor_local: monitorLocal, metrics: metricSettings, local_disk_path: localDiskPath}),
+  })
+    .then(resp => {
+      if (!resp.ok) throw new Error('保存失败');
+      return resp.json();
+    })
+    .then(data => {
+      serverConfigs = data.hosts || [];
+      monitorLocal = data.monitor_local !== false;
+      metricSettings = normalizeMetricConfig(data.metrics);
+      localDiskPath = data.local_disk_path || data.disk_path || '~';
+      renderServerConfigs();
+      syncSettingsControls();
+      if (status) status.textContent = '已保存，正在刷新监控服务器...';
+      refresh();
+      return true;
+    })
+    .catch(e => {
+      if (status) status.textContent = '保存失败：' + e.message;
+      return false;
     });
-    if (!resp.ok) throw new Error('保存失败');
-    const data = await resp.json();
-    serverConfigs = data.hosts || [];
-    monitorLocal = data.monitor_local !== false;
-    metricSettings = normalizeMetricConfig(data.metrics);
-    localDiskPath = data.local_disk_path || data.disk_path || '~';
-    renderServerConfigs();
-    syncSettingsControls();
-    if (status) status.textContent = '已保存，正在刷新监控服务器...';
-    refresh();
-    return true;
-  } catch (e) {
-    if (status) status.textContent = '保存失败：' + e.message;
-    return false;
-  }
 }
 
 function selectConfigImportFile() {
@@ -1847,8 +1986,7 @@ async function exportServerConfig() {
     if (serverSaveTimer) {
       const saved = await saveServerConfigs();
       if (!saved) throw new Error('导出前保存失败');
-    }
-    const resp = await fetch('/api/config/export');
+    }    const resp = await fetch('/api/config/export');
     if (!resp.ok) throw new Error('导出失败');
     const blob = await resp.blob();
     const url = URL.createObjectURL(blob);
@@ -2236,7 +2374,8 @@ function closeHistory() {
 }
 
 function closeHistoryOnBackdrop(event) {
-  if (event.target.id === 'history-overlay') closeHistory();
+  if (_overlayMouseDown && event.target.id === 'history-overlay') closeHistory();
+  _overlayMouseDown = false;
 }
 
 function setHistoryRange(range) {

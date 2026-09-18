@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """GPU Monitor - Flask server that reads SSH config and queries remote GPUs."""
 
+import base64
+import binascii
 import getpass
+import hashlib
+import hmac
 import json
 import os
-import queue
 import re
 import shlex
 import subprocess
@@ -22,6 +25,8 @@ app = Flask(__name__)
 
 SSH_CONFIG_PATH = os.path.expanduser("~/.ssh/config")
 SERVER_CONFIG_PATH = os.path.expanduser("~/.gnvitop/servers.json")
+SECRET_KEY_PATH = os.path.expanduser("~/.gnvitop/.secret")
+PASSWORD_ENC_PREFIX = "gnv1:"
 HISTORY_PATH = os.path.expanduser("~/.gnvitop/history.jsonl")
 SSH_TIMEOUT = 45
 DEFAULT_DISK_PATH = "~"
@@ -250,6 +255,66 @@ def _normalize_metrics(metrics):
     return {key: bool(source.get(key, default)) for key, default in DEFAULT_METRICS.items()}
 
 
+def _load_secret_key():
+    """Load (or create) the local key file used to encrypt stored passwords."""
+    try:
+        with open(SECRET_KEY_PATH, "rb") as f:
+            key = f.read()
+        if len(key) >= 32:
+            return key
+    except OSError:
+        pass
+    key = os.urandom(32)
+    os.makedirs(os.path.dirname(SECRET_KEY_PATH), exist_ok=True)
+    with open(SECRET_KEY_PATH, "wb") as f:
+        f.write(key)
+    try:
+        os.chmod(SECRET_KEY_PATH, 0o600)
+    except OSError:
+        pass
+    return key
+
+
+def _encrypt_password(plain):
+    """Encrypt a password for at-rest storage (stdlib-only, local key file)."""
+    if not plain or plain.startswith(PASSWORD_ENC_PREFIX):
+        return plain
+    key = _load_secret_key()
+    data = plain.encode("utf-8")
+    nonce = os.urandom(16)
+    stream = hashlib.pbkdf2_hmac("sha256", key, nonce, 1000, dklen=len(data))
+    ciphertext = bytes(a ^ b for a, b in zip(data, stream))
+    tag = hmac.new(key, nonce + ciphertext, hashlib.sha256).digest()
+    return (
+        PASSWORD_ENC_PREFIX
+        + base64.urlsafe_b64encode(nonce).decode() + ":"
+        + base64.urlsafe_b64encode(ciphertext).decode() + ":"
+        + base64.urlsafe_b64encode(tag).decode()
+    )
+
+
+def _decrypt_password(token):
+    """Decrypt a stored password token; returns None if it cannot be recovered.
+
+    Non-token input (plaintext from imports) is passed through unchanged.
+    """
+    if not token or not token.startswith(PASSWORD_ENC_PREFIX):
+        return token or None
+    try:
+        _, nonce_b64, ciphertext_b64, tag_b64 = token.split(":")
+        nonce = base64.urlsafe_b64decode(nonce_b64)
+        ciphertext = base64.urlsafe_b64decode(ciphertext_b64)
+        tag = base64.urlsafe_b64decode(tag_b64)
+    except (ValueError, binascii.Error):
+        return None
+    key = _load_secret_key()
+    expected = hmac.new(key, nonce + ciphertext, hashlib.sha256).digest()
+    if not hmac.compare_digest(expected, tag):
+        return None
+    stream = hashlib.pbkdf2_hmac("sha256", key, nonce, 1000, dklen=len(ciphertext))
+    return bytes(a ^ b for a, b in zip(ciphertext, stream)).decode("utf-8", errors="replace")
+
+
 def _config_payload(hosts, monitor_local=True, metrics=None, local_disk_path=DEFAULT_DISK_PATH):
     normalized_metrics = _normalize_metrics(metrics)
     return {
@@ -264,9 +329,13 @@ def _config_payload(hosts, monitor_local=True, metrics=None, local_disk_path=DEF
 
 
 def save_server_config(hosts, monitor_local=True, metrics=None, local_disk_path=DEFAULT_DISK_PATH):
+    payload = _config_payload(hosts, monitor_local, metrics, local_disk_path)
+    for host in payload["hosts"]:
+        # Never write passwords to disk in plaintext.
+        host["password"] = _encrypt_password(host.get("password"))
     os.makedirs(os.path.dirname(SERVER_CONFIG_PATH), exist_ok=True)
     with open(SERVER_CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(_config_payload(hosts, monitor_local, metrics, local_disk_path), f, indent=2)
+        json.dump(payload, f, indent=2)
 
 
 def save_config_payload(payload):
@@ -310,6 +379,15 @@ def load_config_payload():
     legacy_disk_path = data.get("disk_path", DEFAULT_DISK_PATH)
     local_disk_path = data.get("local_disk_path", legacy_disk_path)
     metrics = _normalize_metrics(data.get("metrics"))
+    hosts = _dedupe_hosts(
+        data.get("hosts", []),
+        default_disk_path=legacy_disk_path,
+        default_metrics=metrics,
+    )
+    for host in hosts:
+        if host.get("password"):
+            # Decrypt into memory for use; returns None if unrecoverable.
+            host["password"] = _decrypt_password(host["password"])
     return {
         "version": data.get("version", 1),
         "imported_from_ssh": data.get("imported_from_ssh", True),
@@ -317,11 +395,7 @@ def load_config_payload():
         "monitor_local": bool(data.get("monitor_local", True)),
         "metrics": metrics,
         "local_disk_path": _normalize_disk_path(local_disk_path),
-        "hosts": _dedupe_hosts(
-            data.get("hosts", []),
-            default_disk_path=legacy_disk_path,
-            default_metrics=metrics,
-        ),
+        "hosts": hosts,
     }
 
 
@@ -588,7 +662,145 @@ def _query_remote_system(client, metrics, disk_path=DEFAULT_DISK_PATH):
     return _filter_system_metrics(_parse_system_output(stdout.read().decode("utf-8")), metrics)
 
 
+# ── Windows local helpers (Win32 APIs; no external dependencies) ───────────────
+if os.name == "nt":
+    import ctypes
+    from ctypes import wintypes
+
+    class _FILETIME(ctypes.Structure):
+        _fields_ = [("lo", wintypes.DWORD), ("hi", wintypes.DWORD)]
+
+    class _MEMORYSTATUSEX(ctypes.Structure):
+        _fields_ = [
+            ("dwLength", wintypes.DWORD),
+            ("dwMemoryLoad", wintypes.DWORD),
+            ("ullTotalPhys", ctypes.c_ulonglong),
+            ("ullAvailPhys", ctypes.c_ulonglong),
+            ("ullTotalPageFile", ctypes.c_ulonglong),
+            ("ullAvailPageFile", ctypes.c_ulonglong),
+            ("ullTotalVirtual", ctypes.c_ulonglong),
+            ("ullAvailVirtual", ctypes.c_ulonglong),
+            ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+        ]
+
+    def _sample_system_times():
+        idle, kernel, user = _FILETIME(), _FILETIME(), _FILETIME()
+        if not ctypes.windll.kernel32.GetSystemTimes(
+            ctypes.byref(idle), ctypes.byref(kernel), ctypes.byref(user)
+        ):
+            raise OSError("GetSystemTimes failed")
+        def value(ft):
+            return (ft.hi << 32) | ft.lo
+        return value(idle), value(kernel), value(user)
+
+    def _read_local_cpu_windows():
+        """CPU usage via GetSystemTimes (load averages don't exist on Windows)."""
+        idle1, kernel1, user1 = _sample_system_times()
+        time.sleep(0.2)
+        idle2, kernel2, user2 = _sample_system_times()
+        total = (kernel2 + user2) - (kernel1 + user1)
+        idle = idle2 - idle1
+        usage = 0 if total <= 0 else (1 - idle / total) * 100
+        return {
+            "usage_pct": round(usage, 1),
+            "cores": os.cpu_count() or 0,
+            "load1": None,
+            "load5": None,
+            "load15": None,
+        }
+
+    def _read_local_memory_windows():
+        """Memory usage via GlobalMemoryStatusEx."""
+        stat = _MEMORYSTATUSEX()
+        stat.dwLength = ctypes.sizeof(_MEMORYSTATUSEX)
+        if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
+            raise OSError("GlobalMemoryStatusEx failed")
+        total = stat.ullTotalPhys
+        available = stat.ullAvailPhys
+        used = max(total - available, 0)
+        return {
+            "total_bytes": total,
+            "used_bytes": used,
+            "available_bytes": available,
+            "usage_pct": round(used / total * 100, 1) if total else 0,
+        }
+
+    def _win_task_users():
+        """Return a pid -> username map via tasklist (local process owners)."""
+        import csv as _csv
+        users = {}
+        try:
+            output = subprocess.run(
+                ["tasklist", "/V", "/FO", "CSV", "/NH"],
+                capture_output=True, text=True, timeout=60,
+            ).stdout
+            for line in output.splitlines():
+                cols = next(_csv.reader([line]), [])
+                if len(cols) > 6 and cols[1].isdigit() and cols[6]:
+                    user = cols[6].split("\\")[-1]
+                    if user and user != "N/A":
+                        users[int(cols[1])] = user
+        except Exception:
+            pass
+        return users
+
+    def _win_pmon_csv(pmon_output):
+        """Convert `nvidia-smi pmon` table output to pid,gpu,mem,user,cmd CSV."""
+        users = _win_task_users()
+        rows = []
+        for line in pmon_output.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split()
+            if len(parts) < 4 or not parts[1].isdigit():
+                continue
+            gpu_idx, pid, mem = parts[0], parts[1], parts[3]
+            command = " ".join(parts[4:])
+            if not mem.isdigit():
+                mem = "0"
+            user = users.get(int(pid)) or "unknown"
+            rows.append(",".join([pid, gpu_idx, mem, user, command]))
+        return "\n".join(rows)
+
+    def _query_local_gpu_windows(result):
+        """Windows local GPU query: call nvidia-smi directly (no POSIX shell)."""
+        try:
+            gpu_out = subprocess.run(
+                ["nvidia-smi",
+                 "--query-gpu=index,name,memory.total,memory.used,memory.free,"
+                 "utilization.gpu,temperature.gpu",
+                 "--format=csv,noheader,nounits"],
+                capture_output=True, text=True, timeout=30,
+            ).stdout.strip()
+        except FileNotFoundError:
+            result["status"] = "no_gpu"
+            result["error"] = "nvidia-smi not found"
+            return
+        except subprocess.TimeoutExpired:
+            result["error"] = "nvidia-smi timed out"
+            return
+
+        gpus = _build_gpus(gpu_out)
+        if not gpus:
+            result["status"] = "no_gpu"
+            result["error"] = "No supported GPU found (nvidia-smi returned no data)"
+            return
+        try:
+            pmon_out = subprocess.run(
+                ["nvidia-smi", "pmon", "-c", "1", "-s", "m"],
+                capture_output=True, text=True, timeout=30,
+            ).stdout
+            _attach_processes(gpus, _win_pmon_csv(pmon_out))
+        except Exception:
+            pass
+        result["gpus"] = gpus
+        result["status"] = "ok"
+
+
 def _read_local_cpu():
+    if os.name == "nt":
+        return _read_local_cpu_windows()
     with open("/proc/stat", "r") as f:
         parts1 = [int(x) for x in f.readline().split()[1:]]
     time.sleep(0.2)
@@ -612,6 +824,8 @@ def _read_local_cpu():
 
 
 def _read_local_memory():
+    if os.name == "nt":
+        return _read_local_memory_windows()
     vals = {}
     with open("/proc/meminfo", "r") as f:
         for line in f:
@@ -662,30 +876,139 @@ def query_local_system(metrics, disk_path=DEFAULT_DISK_PATH):
     return system
 
 
+def _win_ssh_exe():
+    """Locate Windows' built-in OpenSSH binary, if present."""
+    path = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"),
+                        "System32", "OpenSSH", "ssh.exe")
+    return path if os.path.isfile(path) else None
+
+
+class _NativeSshPipe:
+    """Adapter that lets paramiko run over a native `ssh -W host:port` pipe.
+
+    Some corporate VPN clients (observed with CorpLink) drop raw Python
+    sockets mid-handshake while letting Windows' native ssh.exe through.
+    Tunneling the SSH protocol over ssh.exe's stdio works around that.
+    Password auth is fed to ssh.exe via a temp SSH_ASKPASS script.
+    """
+
+    def __init__(self, ssh_exe, hostname, port, user, identity_file, password):
+        self._closed = False
+        self._askpass_path = None
+        env = dict(os.environ)
+        if password:
+            # ssh.exe (8.4+) can be forced to fetch the password from
+            # SSH_ASKPASS instead of the tty-less stdin.
+            import tempfile
+            fd, self._askpass_path = tempfile.mkstemp(suffix=".bat", prefix="gnvitop_askpass_")
+            with os.fdopen(fd, "w") as f:
+                f.write("@echo " + password.replace("\n", "") + "\r\n")
+            env["SSH_ASKPASS"] = self._askpass_path
+            env["SSH_ASKPASS_REQUIRE"] = "force"
+            env["DISPLAY"] = "gnvitop"
+        cmd = [ssh_exe, "-o", "StrictHostKeyChecking=no",
+               "-o", "ConnectTimeout=20"]
+        if password:
+            # BatchMode would disable password auth entirely.
+            cmd += ["-o", "NumberOfPasswordPrompts=1", "-o", "PreferredAuthentications=password,keyboard-interactive"]
+        else:
+            cmd += ["-o", "BatchMode=yes"]
+        if identity_file:
+            cmd += ["-i", identity_file]
+        if user:
+            cmd += ["-l", user]
+        cmd += ["-W", f"{hostname}:{port}", hostname]
+        self.proc = subprocess.Popen(
+            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, env=env)
+
+    def send(self, data):
+        self.proc.stdin.write(data)
+        self.proc.stdin.flush()
+        return len(data)
+
+    def recv(self, n):
+        data = self.proc.stdout.read1(n)
+        if not data:
+            raise EOFError("native ssh pipe closed")
+        return data
+
+    def close(self):
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            self.proc.terminate()
+        except Exception:
+            pass
+        if self._askpass_path:
+            try:
+                os.remove(self._askpass_path)
+            except OSError:
+                pass
+
+    def settimeout(self, *args):
+        pass
+
+    def setblocking(self, *args):
+        pass
+
+
 def _make_ssh_client(hostname, port, user, identity_file, password=None, sock=None):
-    """Create and connect a paramiko SSHClient."""
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    kwargs = {
-        "hostname": hostname,
-        "port": port,
-        "username": user,
-        "timeout": SSH_TIMEOUT,
-        "banner_timeout": SSH_TIMEOUT,
-        "auth_timeout": SSH_TIMEOUT,
-        "allow_agent": True,
-        "look_for_keys": True,
-    }
-    if identity_file:
-        kwargs["key_filename"] = identity_file
-    if password:
-        kwargs["password"] = password
-        kwargs["look_for_keys"] = False
-        kwargs["allow_agent"] = False
+    """Create and connect a paramiko SSHClient.
+
+    On Windows, if the direct TCP connection fails with a banner/SSH error,
+    retries the connection tunneled through the native ssh.exe (ssh -W).
+    """
+    def _connect(sock_to_use):
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        kwargs = {
+            "hostname": hostname,
+            "port": port,
+            "username": user,
+            "timeout": SSH_TIMEOUT,
+            "banner_timeout": SSH_TIMEOUT,
+            "auth_timeout": SSH_TIMEOUT,
+            "allow_agent": True,
+            "look_for_keys": True,
+        }
+        if identity_file:
+            kwargs["key_filename"] = identity_file
+        if password:
+            kwargs["password"] = password
+            kwargs["look_for_keys"] = False
+            kwargs["allow_agent"] = False
+        if sock_to_use is not None:
+            kwargs["sock"] = sock_to_use
+        client.connect(**kwargs)
+        return client
+
     if sock is not None:
-        kwargs["sock"] = sock
-    client.connect(**kwargs)
-    return client
+        return _connect(sock)
+
+    try:
+        return _connect(None)
+    except paramiko.AuthenticationException:
+        # Auth failure means the transport itself works — retrying via
+        # ssh.exe cannot help, and would mask the real (credential) error.
+        raise
+    except (paramiko.SSHException, EOFError, OSError) as original_error:
+        # Windows corporate-VPN quirk: raw sockets get cut during the banner
+        # exchange while native ssh.exe passes. Retry through it.
+        if os.name == "nt":
+            ssh_exe = _win_ssh_exe()
+            if ssh_exe:
+                try:
+                    pipe = _NativeSshPipe(ssh_exe, hostname, port, user, identity_file, password)
+                    return _connect(pipe)
+                except paramiko.AuthenticationException as fallback_error:
+                    # The transport worked but credentials didn't — report
+                    # that instead of the transport-level original error.
+                    raise fallback_error
+                except Exception:
+                    pass  # fallback also failed at transport level
+        raise original_error
 
 
 def query_gpu(host_info, hosts_by_alias=None, metrics=None):
@@ -842,6 +1165,11 @@ def query_local_gpu(metrics=None, disk_path=DEFAULT_DISK_PATH):
 
     if not metrics.get("gpu"):
         result["status"] = "ok"
+        return result
+
+    if os.name == "nt":
+        # Windows has no POSIX shell for COMBINED_CMD — query nvidia-smi directly.
+        _query_local_gpu_windows(result)
         return result
 
     try:
@@ -1068,22 +1396,25 @@ def discover_gadi_nodes(hosts_by_alias):
     return discovered
 
 
-def fetch_all_gpu_info():
-    """Query all hosts (local + remote) concurrently and return sorted results."""
+def _collect_query_hosts():
+    """Load enabled hosts (plus discovered Gadi nodes) for one query pass."""
     payload = load_config_payload()
-    monitor_local = payload["monitor_local"]
-    metrics = payload["metrics"]
-    local_disk_path = payload["local_disk_path"]
-    hosts = [h for h in load_server_config() if h.get("enabled", True)]
+    hosts = [h for h in payload["hosts"] if h.get("enabled", True)]
     hosts_by_alias = {h["alias"]: h for h in hosts}
-
-    # Discover dynamically allocated Gadi compute nodes
-    dynamic = discover_gadi_nodes(hosts_by_alias)
-    for h in dynamic:
+    for h in discover_gadi_nodes(hosts_by_alias):
         if h["alias"] not in hosts_by_alias:
             hosts.append(h)
             hosts_by_alias[h["alias"]] = h
+    return payload["monitor_local"], payload["metrics"], payload["local_disk_path"], hosts, hosts_by_alias
 
+
+def iter_gpu_results():
+    """Query all hosts concurrently, yielding each host result as it arrives.
+
+    Single code path shared by the cached fetch and the SSE stream. When fully
+    consumed, records history for the pass.
+    """
+    monitor_local, metrics, local_disk_path, hosts, hosts_by_alias = _collect_query_hosts()
     results = []
     with ThreadPoolExecutor(max_workers=20) as executor:
         futures = {}
@@ -1092,11 +1423,15 @@ def fetch_all_gpu_info():
         for h in hosts:
             futures[executor.submit(query_gpu, h, hosts_by_alias, metrics)] = h
         for future in as_completed(futures):
-            results.append(future.result())
+            host_result = future.result()
+            results.append(host_result)
+            yield host_result
+    record_history(results)
 
-    sorted_results = _sort_results(results)
-    record_history(sorted_results)
-    return sorted_results
+
+def fetch_all_gpu_info():
+    """Query all hosts (local + remote) concurrently and return sorted results."""
+    return _sort_results(list(iter_gpu_results()))
 
 
 def _do_background_refresh():
@@ -1253,6 +1588,31 @@ def api_import_ssh_config():
     })
 
 
+@app.route("/api/config/test", methods=["POST"])
+def api_test_host():
+    """Test SSH connectivity and GPU detection for a single (possibly unsaved) host."""
+    payload = request.get_json(silent=True) or {}
+    host = payload.get("host")
+    if not isinstance(host, dict):
+        return jsonify({"error": "host is required"}), 400
+
+    merged = dict(host)
+    if merged.get("password") == "__KEEP__":
+        saved = load_server_config()
+        by_endpoint = {_host_endpoint_key(h): h for h in saved}
+        by_alias = {h["alias"]: h for h in saved}
+        saved_host = by_endpoint.get(_host_endpoint_key(merged)) or by_alias.get(
+            str(merged.get("alias") or "").strip()
+        )
+        merged["password"] = (saved_host or {}).get("password")
+
+    normalized = _normalize_host_config(merged)
+    # A test always probes GPUs, even if the host's GPU metric is disabled.
+    normalized["metrics"] = {**_normalize_metrics(normalized.get("metrics")), "gpu": True}
+    hosts_by_alias = {h["alias"]: h for h in load_server_config()}
+    return jsonify(query_gpu(normalized, hosts_by_alias))
+
+
 @app.route("/api/history")
 def api_history():
     alias = str(request.args.get("host") or "").strip()
@@ -1282,31 +1642,14 @@ def api_refresh():
 def api_stream():
     """SSE endpoint: streams each host result as it arrives, then a 'done' event."""
     def generate():
-        payload = load_config_payload()
-        monitor_local = payload["monitor_local"]
-        metrics = payload["metrics"]
-        local_disk_path = payload["local_disk_path"]
-        hosts = [h for h in load_server_config() if h.get("enabled", True)]
-        hosts_by_alias = {h["alias"]: h for h in hosts}
         results = []
-
-        with ThreadPoolExecutor(max_workers=20) as executor:
-            futures = {}
-            if monitor_local:
-                futures[executor.submit(query_local_gpu, metrics, local_disk_path)] = None
-            for h in hosts:
-                futures[executor.submit(query_gpu, h, hosts_by_alias, metrics)] = h
-
-            for future in as_completed(futures):
-                host_result = future.result()
-                results.append(host_result)
-                payload = json.dumps({"host": host_result})
-                yield f"data: {payload}\n\n"
+        for host_result in iter_gpu_results():
+            results.append(host_result)
+            yield f"data: {json.dumps({'host': host_result})}\n\n"
 
         # Update cache with fresh streamed data
         sorted_results = _sort_results(results)
         updated_at = time.time()
-        record_history(sorted_results, updated_at)
         with cache_lock:
             cache["data"] = sorted_results
             cache["last_update"] = updated_at

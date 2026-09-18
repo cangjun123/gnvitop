@@ -2,10 +2,11 @@
 
 import csv
 import os
+import tempfile
 import threading
 import time
 
-_CSV_PATH = "/tmp/gnvitop_history.csv"
+_CSV_PATH = os.path.join(tempfile.gettempdir(), "gnvitop_history.csv")
 _HEADERS = [
     "timestamp", "host_alias", "hostname",
     "gpu_index", "gpu_name",

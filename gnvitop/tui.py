@@ -1,8 +1,12 @@
 """Terminal UI for gnvitop using curses."""
 
-import curses
 import threading
 import time
+
+try:
+    import curses
+except ImportError:  # Windows without the windows-curses package
+    curses = None
 
 
 def _fmt_mb(mb):
@@ -247,6 +251,11 @@ def _tui_main(stdscr, fetch_fn, refresh_interval):
 
 def run_tui(ssh_config_path=None, refresh_interval=30):
     """Launch the curses TUI dashboard."""
+    if curses is None:
+        raise SystemExit(
+            "TUI mode requires the curses module. "
+            "On Windows, install it with: pip install windows-curses"
+        )
     import gnvitop.server as srv
     if ssh_config_path:
         srv.SSH_CONFIG_PATH = ssh_config_path

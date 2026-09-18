@@ -35,6 +35,6 @@ gnvitop = "gnvitop.cli:main"
 include = ["gnvitop*"]
 
 [project.urls]
-Homepage = "https://github.com/Linwei94/gnvitop"
-Repository = "https://github.com/Linwei94/gnvitop"
-Issues = "https://github.com/Linwei94/gnvitop/issues"
+Homepage = "https://github.com/cangjun123/gnvitop"
+Repository = "https://github.com/cangjun123/gnvitop"
+Issues = "https://github.com/cangjun123/gnvitop/issues"

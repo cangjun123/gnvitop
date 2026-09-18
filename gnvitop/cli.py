@@ -10,6 +10,31 @@ import webbrowser
 import threading
 
 
+def _kill_stale_gnvitop_windows(port):
+    """Windows: find and kill a previous gnvitop holding the port via netstat."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["netstat", "-ano", "-p", "tcp"], capture_output=True, text=True,
+        )
+        for line in result.stdout.splitlines():
+            parts = line.split()
+            if len(parts) >= 5 and parts[3] == "LISTENING" and parts[1].endswith(f":{port}"):
+                pid = int(parts[4])
+                task = subprocess.run(
+                    ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+                    capture_output=True, text=True,
+                ).stdout.lower()
+                if "python" in task or "gnvitop" in task:
+                    os.kill(pid, signal.SIGTERM)
+                    print(f"Killed previous gnvitop (PID {pid}) on port {port}")
+                    import time
+                    time.sleep(0.5)
+                return
+    except Exception:
+        pass
+
+
 def _kill_stale_gnvitop(port):
     """If the port is occupied by a previous gnvitop process, kill it."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -20,7 +45,11 @@ def _kill_stale_gnvitop(port):
     except OSError:
         pass  # Port is in use
 
-    # Find the PID holding the port (Linux only, via /proc)
+    if os.name == "nt":
+        _kill_stale_gnvitop_windows(port)
+        return
+
+    # Find the PID holding the port (Linux only, via ss)
     try:
         import subprocess
         result = subprocess.run(
@@ -77,7 +106,7 @@ def main():
         "--csv",
         default=None,
         metavar="PATH",
-        help="CSV file path for GPU history (default: /tmp/gnvitop_history.csv, requires --history)",
+        help="CSV file path for GPU history (default: gnvitop_history.csv in the system temp dir, requires --history)",
     )
     parser.add_argument(
         "--interval",
@@ -199,7 +228,11 @@ def main():
     else:
         display_url = f"http://{host}:{args.port}"
 
-    print(f"gnvitop v{__version__} — \033[1;36m{display_url}\033[0m")
+    # cmd.exe may not render ANSI colors — only colorize on POSIX terminals
+    if os.name == "nt":
+        print(f"gnvitop v{__version__} — {display_url}")
+    else:
+        print(f"gnvitop v{__version__} — \033[1;36m{display_url}\033[0m")
     print("Press Ctrl+C to stop.\n")
 
     if not args.no_browser and not is_ssh:
