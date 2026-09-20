@@ -2671,6 +2671,11 @@ let _foldedDivider = null;
 function _cardElement(alias, html, fresh) {
   const cached = _cardCache.get(alias);
   if (cached && cached.html === html) return cached.el;
+  // Content changed: detach the old element before swapping the cache entry,
+  // otherwise the stale card stays mounted and duplicates accumulate.
+  if (cached && cached.el && cached.el.parentElement) {
+    cached.el.parentElement.removeChild(cached.el);
+  }
   const tpl = document.createElement('template');
   tpl.innerHTML = html.trim();
   const el = tpl.content.firstElementChild;
