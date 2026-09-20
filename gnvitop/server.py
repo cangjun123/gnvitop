@@ -458,8 +458,13 @@ def public_host_config(host):
 
 
 def _invalidate_cache():
+    """Mark cache stale without clearing it.
+
+    Keeping the previous data means /api/gpus keeps returning a full host
+    list (with stale readings) until the background refresh lands, instead
+    of an empty list that would blank the dashboard.
+    """
     with cache_lock:
-        cache["data"] = []
         cache["last_update"] = 0
 
 

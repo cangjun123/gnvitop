@@ -94,7 +94,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .header h1 {
     font-size: 28px;
     font-weight: 700;
-    color: #f1f5f9;
+    color: var(--text-strong);
     letter-spacing: -0.5px;
   }
 
@@ -121,26 +121,26 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .header-divider {
     width: 1px;
     height: 20px;
-    background: #334155;
+    background: var(--border);
     flex-shrink: 0;
   }
 
   .btn-refresh {
     padding: 6px 14px;
-    border: 1px solid #334155;
-    background: #1e293b;
-    color: #e2e8f0;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
     border-radius: 8px;
     cursor: pointer;
     font-size: 13px;
     transition: all 0.2s;
     white-space: nowrap;
   }
-  .btn-refresh:hover { background: #334155; border-color: #475569; color: #f1f5f9; }
+  .btn-refresh:hover { background: var(--hover-soft); border-color: var(--border-hover); color: var(--text-strong); }
   .btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
   @keyframes refreshPulse {
     0%   { box-shadow: 0 0 0 0 rgba(96,165,250,0.5); }
-    50%  { box-shadow: 0 0 0 6px rgba(96,165,250,0); background: #1e3a5f; border-color: #60a5fa; }
+    50%  { box-shadow: 0 0 0 6px rgba(96,165,250,0); background: var(--refresh-pulse-bg); border-color: var(--local-text); }
     100% { box-shadow: 0 0 0 0 rgba(96,165,250,0); }
   }
   .btn-refresh.refreshing { animation: refreshPulse 0.8s ease; }
@@ -159,7 +159,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     line-height: 1;
   }
   .global-watch-btn:hover { color: var(--text-muted); transform: scale(1.1); }
-  .global-watch-btn.watching { color: #facc15; }
+  .global-watch-btn.watching { color: var(--warning-text); }
 
   /* Drag-and-drop */
   .host-card.dragging { opacity: 0.4; cursor: grabbing; }
@@ -178,13 +178,18 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .summary-bar {
     display: flex;
     gap: 16px;
-    margin-bottom: 24px;
+    margin-bottom: 16px;
     flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: var(--bg);
+    padding: 10px 0 12px;
   }
 
   .summary-card {
-    background: #1e293b;
-    border: 1px solid #334155;
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 10px;
     padding: 16px 24px;
     min-width: 160px;
@@ -211,19 +216,19 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   }
 
   .host-card {
-    background: #1e293b;
-    border: 1px solid #334155;
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 12px;
     overflow: hidden;
     transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s;
   }
   .host-card:hover {
-    border-color: #475569;
+    border-color: var(--border-hover);
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    box-shadow: var(--shadow-card);
   }
   .host-header:hover {
-    background: rgba(255,255,255,0.03);
+    background: var(--hover-soft);
   }
 
   .host-card.status-ok { border-left: 3px solid #22c55e; }
@@ -237,13 +242,13 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid #334155;
+    border-bottom: 1px solid var(--border);
   }
 
   .host-name {
     font-size: 16px;
     font-weight: 600;
-    color: #f1f5f9;
+    color: var(--text-strong);
   }
 
   .host-info {
@@ -259,21 +264,21 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     text-transform: uppercase;
     letter-spacing: 0.3px;
   }
-  .badge-ok { background: #052e16; color: #4ade80; }
-  .badge-no_gpu { background: #422006; color: #facc15; }
-  .badge-error { background: #450a0a; color: #f87171; }
-  .badge-tpu { background: #2e1065; color: #a78bfa; }
+  .badge-ok { background: var(--success-bg); color: var(--success-text); }
+  .badge-no_gpu { background: var(--warning-bg); color: var(--warning-text); }
+  .badge-error { background: var(--error-bg); color: var(--error-text); }
+  .badge-tpu { background: var(--tpu-bg); color: var(--tpu-text); }
 
   .host-body { padding: 16px 20px; }
 
   .error-msg {
-    color: #f87171;
+    color: var(--error-text);
     font-size: 13px;
     padding: 8px 0;
   }
 
   .no-gpu-msg {
-    color: #facc15;
+    color: var(--warning-text);
     font-size: 13px;
     padding: 8px 0;
   }
@@ -281,17 +286,17 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .gpu-item {
     padding: 12px 0;
   }
-  .gpu-item + .gpu-item { border-top: 1px solid #1e293b; }
+  .gpu-item + .gpu-item { border-top: 1px solid var(--border); }
 
   .system-panel {
     padding: 12px 0;
-    border-bottom: 1px solid #1e293b;
+    border-bottom: 1px solid var(--border);
     margin-bottom: 4px;
   }
   .system-title {
     font-size: 13px;
     font-weight: 700;
-    color: #cbd5e1;
+    color: var(--text);
     margin-bottom: 10px;
   }
   .system-grid {
@@ -300,7 +305,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     gap: 8px;
   }
   .system-metric {
-    background: #0f172a;
+    background: var(--surface-muted);
     border-radius: 7px;
     padding: 9px;
   }
@@ -313,7 +318,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     margin-bottom: 4px;
   }
   .system-metric-value {
-    color: #f1f5f9;
+    color: var(--text);
     font-size: 15px;
     font-weight: 700;
   }
@@ -333,7 +338,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .gpu-name {
     font-size: 14px;
     font-weight: 600;
-    color: #cbd5e1;
+    color: var(--text);
   }
 
   .gpu-temp {
@@ -342,9 +347,9 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     border-radius: 6px;
     font-weight: 600;
   }
-  .temp-cool { background: #052e16; color: #4ade80; }
-  .temp-warm { background: #422006; color: #facc15; }
-  .temp-hot { background: #450a0a; color: #f87171; }
+  .temp-cool { background: var(--success-bg); color: var(--success-text); }
+  .temp-warm { background: var(--warning-bg); color: var(--warning-text); }
+  .temp-hot { background: var(--error-bg); color: var(--error-text); }
 
   .bar-container {
     margin-bottom: 8px;
@@ -360,7 +365,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 
   .bar-track {
     height: 8px;
-    background: #0f172a;
+    background: var(--surface-muted);
     border-radius: 4px;
     overflow: hidden;
   }
@@ -384,7 +389,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 
   .stat {
     text-align: center;
-    background: #0f172a;
+    background: var(--surface-muted);
     border-radius: 6px;
     padding: 8px;
   }
@@ -392,7 +397,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .stat .stat-value {
     font-size: 16px;
     font-weight: 700;
-    color: #f1f5f9;
+    color: var(--text);
   }
 
   .stat .stat-label {
@@ -412,8 +417,8 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     display: inline-block;
     width: 28px;
     height: 28px;
-    border: 3px solid #334155;
-    border-top-color: #60a5fa;
+    border: 3px solid var(--border);
+    border-top-color: var(--local-text);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
     margin-bottom: 12px;
@@ -432,12 +437,12 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     user-select: none;
     transition: color 0.2s;
   }
-  .toggle-switch:hover { color: #cbd5e1; }
+  .toggle-switch:hover { color: var(--text-strong); }
   .toggle-switch input { display: none; }
   .toggle-knob {
     width: 30px;
     height: 17px;
-    background: #334155;
+    background: var(--border);
     border-radius: 9px;
     position: relative;
     transition: background 0.2s;
@@ -448,7 +453,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     position: absolute;
     width: 13px;
     height: 13px;
-    background: #94a3b8;
+    background: var(--text-muted);
     border-radius: 50%;
     top: 2px;
     left: 2px;
@@ -456,28 +461,28 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   }
   .toggle-switch input:checked ~ .toggle-knob { background: #1d4ed8; }
   .toggle-switch input:checked ~ .toggle-knob::after { transform: translateX(13px); background: #60a5fa; }
-  .toggle-switch input:checked ~ .toggle-label { color: #cbd5e1; }
+  .toggle-switch input:checked ~ .toggle-label { color: var(--text); }
 
   /* Universal tooltip */
   #ui-tooltip {
     position: fixed;
-    background: #0f172a;
-    border: 1px solid #334155;
+    background: var(--surface-muted);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 7px 12px;
     font-size: 12px;
-    color: #cbd5e1;
+    color: var(--text);
     pointer-events: none;
     z-index: 9999;
     max-width: 260px;
     line-height: 1.5;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    box-shadow: var(--shadow-tooltip);
     opacity: 0;
     transition: opacity 0.15s ease;
   }
   #ui-tooltip.visible { opacity: 1; }
 
-  .badge-local { background: #172554; color: #60a5fa; }
+  .badge-local { background: var(--local-bg); color: var(--local-text); }
 
   .gpu-users {
     display: flex;
@@ -490,14 +495,14 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     font-size: 11px;
     padding: 2px 8px;
     border-radius: 4px;
-    background: #334155;
+    background: var(--border);
     color: var(--text-muted);
     font-family: monospace;
   }
 
   .user-tag.current-user {
-    background: #172554;
-    color: #60a5fa;
+    background: var(--local-bg);
+    color: var(--local-text);
     font-weight: 700;
     border: 1px solid #3b82f6;
   }
@@ -510,8 +515,8 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 
   .mode-toggle {
     display: flex;
-    background: #0f172a;
-    border: 1px solid #334155;
+    background: var(--surface-muted);
+    border: 1px solid var(--border);
     border-radius: 8px;
     overflow: hidden;
   }
@@ -525,16 +530,17 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     font-size: 13px;
     white-space: nowrap;
   }
-  .mode-toggle button:hover { color: var(--text-muted); background: #1e293b; }
-  .mode-toggle button.active { background: #334155; color: #e2e8f0; }
+  .mode-toggle button:hover { color: var(--text-muted); background: var(--hover-soft); }
+  .mode-toggle button.active { background: var(--border); color: var(--text-strong); }
 
   .theme-toggle {
     display: flex;
-    background: #0f172a;
-    border: 1px solid #334155;
+    background: var(--surface-muted);
+    border: 1px solid var(--border);
     border-radius: 8px;
     overflow: hidden;
   }
+  .theme-toggle:hover { color: var(--text-strong); background: var(--hover-soft); }
   .theme-toggle button {
     padding: 5px 11px;
     border: none;
@@ -545,8 +551,8 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     font-size: 13px;
     white-space: nowrap;
   }
-  .theme-toggle button:hover { color: var(--text-muted); background: #1e293b; }
-  .theme-toggle button.active { background: #334155; color: #e2e8f0; }
+  .theme-toggle button:hover { color: var(--text-muted); background: var(--hover-soft); }
+  .theme-toggle button.active { background: var(--border); color: var(--text-strong); }
 
   /* Initial load animation only */
   .host-card.first-render {
@@ -559,8 +565,8 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 
   /* Interval selector */
   .interval-select {
-    background: #0f172a;
-    border: 1px solid #334155;
+    background: var(--surface-muted);
+    border: 1px solid var(--border);
     border-radius: 8px;
     color: var(--text-muted);
     font-size: 13px;
@@ -569,7 +575,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     outline: none;
     transition: border-color 0.2s, color 0.2s;
   }
-  .interval-select:hover { border-color: #475569; color: #cbd5e1; }
+  .interval-select:hover { border-color: var(--border-hover); color: var(--text-strong); }
 
   .settings-button {
     width: 34px;
@@ -577,17 +583,17 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid #334155;
-    background: #1e293b;
-    color: #e2e8f0;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.2s;
   }
   .settings-button:hover {
-    border-color: #475569;
-    background: #334155;
-    color: #f1f5f9;
+    border-color: var(--border-hover);
+    background: var(--hover-soft);
+    color: var(--text-strong);
   }
   .settings-button svg {
     width: 17px;
@@ -613,8 +619,8 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .settings-panel {
     width: min(380px, calc(100vw - 28px));
     height: 100%;
-    background: #1e293b;
-    border-left: 1px solid #334155;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
     box-shadow: -16px 0 40px rgba(0,0,0,0.28);
     padding: 22px;
     transform: translateX(100%);
@@ -632,7 +638,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .settings-title {
     font-size: 20px;
     font-weight: 700;
-    color: #f1f5f9;
+    color: var(--text);
   }
   .settings-subtitle {
     font-size: 12px;
@@ -642,8 +648,8 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .settings-close {
     width: 30px;
     height: 30px;
-    border: 1px solid #334155;
-    background: #0f172a;
+    border: 1px solid var(--border);
+    background: var(--surface-muted);
     color: var(--text-muted);
     border-radius: 8px;
     cursor: pointer;
@@ -651,12 +657,13 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     line-height: 1;
   }
   .settings-close:hover {
-    color: #f1f5f9;
-    border-color: #475569;
+    color: var(--text-strong);
+    border-color: var(--border-hover);
+    background: var(--hover-soft);
   }
   .settings-section {
     padding: 16px 0;
-    border-top: 1px solid #334155;
+    border-top: 1px solid var(--border);
   }
   .settings-section-title {
     font-size: 11px;
@@ -672,7 +679,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     justify-content: space-between;
     gap: 16px;
     min-height: 38px;
-    color: #cbd5e1;
+    color: var(--text);
     font-size: 13px;
   }
   .settings-row + .settings-row { margin-top: 12px; }
@@ -683,7 +690,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     margin-top: 8px;
   }
   .settings-global-watch {
-    border: 1px solid #334155;
+    border: 1px solid var(--border);
     border-radius: 8px;
     width: 34px;
     height: 30px;
@@ -696,17 +703,17 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   }
   .settings-action {
     padding: 6px 10px;
-    border: 1px solid #334155;
+    border: 1px solid var(--border);
     border-radius: 8px;
-    background: #0f172a;
-    color: #cbd5e1;
+    background: var(--surface-muted);
+    color: var(--text);
     cursor: pointer;
     font-size: 12px;
     transition: all 0.2s;
   }
   .settings-action:hover {
-    border-color: #475569;
-    color: #f1f5f9;
+    border-color: var(--border-hover);
+    color: var(--text-strong);
   }
   html.theme-light .settings-action {
     color: #1e293b;
@@ -723,8 +730,8 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     gap: 10px;
   }
   .server-card {
-    border: 1px solid #334155;
-    background: #0f172a;
+    border: 1px solid var(--border);
+    background: var(--surface);
     border-radius: 10px;
     padding: 12px;
   }
@@ -773,7 +780,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .tunnel-status.fail { color: var(--error-text); }
   .server-card-title {
     font-weight: 700;
-    color: #f1f5f9;
+    color: var(--text);
     font-size: 13px;
   }
   .server-grid {
@@ -805,10 +812,10 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   }
   .server-input {
     width: 100%;
-    border: 1px solid #334155;
+    border: 1px solid var(--border);
     border-radius: 7px;
     background: #1e293b;
-    color: #e2e8f0;
+    color: var(--text);
     padding: 7px 8px;
     font-size: 12px;
     outline: none;
@@ -840,7 +847,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .server-remove {
     border: none;
     background: transparent;
-    color: #f87171;
+    color: var(--error-text);
     cursor: pointer;
     font-size: 12px;
   }
@@ -849,7 +856,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     color: var(--text-subtle);
     font-size: 12px;
     padding: 12px;
-    border: 1px dashed #334155;
+    border: 1px dashed var(--border);
     border-radius: 10px;
   }
   .server-save-status {
@@ -912,7 +919,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     position: relative;
   }
   .watch-btn:hover { color: var(--text-muted); }
-  .watch-btn.watching { color: #facc15; }
+  .watch-btn.watching { color: var(--warning-text); }
   @keyframes watchPop {
     0%   { transform: scale(1); }
     35%  { transform: scale(1.5) rotate(-15deg); }
@@ -925,16 +932,16 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     position: absolute;
     right: 0;
     top: calc(100% + 6px);
-    background: #0f172a;
-    border: 1px solid #334155;
+    background: var(--surface-muted);
+    border: 1px solid var(--border);
     border-radius: 8px;
     padding: 8px 12px;
     font-size: 12px;
-    color: #cbd5e1;
+    color: var(--text);
     white-space: nowrap;
     z-index: 100;
     pointer-events: none;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    box-shadow: var(--shadow-popover);
     min-width: 160px;
   }
   .watch-btn:hover .watch-tooltip { display: block; }
@@ -1124,7 +1131,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     content: '';
     flex: 1;
     height: 1px;
-    background: #334155;
+    background: var(--border);
   }
   .folded-label {
     font-size: 11px;
@@ -1137,116 +1144,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .host-grid-folded .host-card { opacity: 0.75; }
   .host-grid-folded .host-card:hover { opacity: 1; }
 
-  /* Theme-aware color overrides */
-  .header h1,
-  .host-name,
-  .stat .stat-value { color: var(--text-strong); }
-
-  .status-text,
-  .summary-card .label,
-  .bar-label,
-  .loading,
-  .toggle-switch,
-  .drag-handle:hover,
-  .global-watch-btn:hover,
-  .watch-btn:hover { color: var(--text-muted); }
-
-  .host-info,
-  .stat .stat-label,
-  .user-mem,
-  .collapsed-info,
-  .mode-toggle button,
-  .theme-toggle button,
-  .folded-label { color: var(--text-subtle); }
-
-  .toggle-switch:hover,
-  .interval-select:hover,
-  .mode-toggle button.active,
-  .theme-toggle button.active,
-  .theme-toggle:hover,
-  .btn-refresh:hover { color: var(--text-strong); }
-
-  .summary-card,
-  .host-card,
-  .btn-refresh,
-  .settings-button,
-  .settings-panel,
-  .server-card {
-    background: var(--surface);
-    border-color: var(--border);
-  }
-  .settings-action,
-  .server-input { border-color: var(--border); }
-
-  .host-card:hover {
-    border-color: var(--border-hover);
-    box-shadow: var(--shadow-card);
-  }
-
-  .host-header:hover,
-  .mode-toggle button:hover,
-  .theme-toggle button:hover,
-  .btn-refresh:hover,
-  .settings-button:hover,
-  .settings-close:hover,
-  .theme-toggle:hover { background: var(--hover-soft); }
-
-  .header-divider,
-  .host-header,
-  .spinner,
-  .mode-toggle,
-  .theme-toggle,
-  .settings-button,
-  .settings-close,
-  .settings-panel,
-  .settings-section,
-  .settings-global-watch,
-  .settings-action,
-  .server-card,
-  .server-input,
-  .server-empty,
-  .interval-select,
-  #ui-tooltip,
-  .watch-btn .watch-tooltip,
-  .folded-divider::before,
-  .folded-divider::after { border-color: var(--border); }
-
-  .header-divider,
-  .folded-divider::before,
-  .folded-divider::after { background: var(--border); }
-
-  .gpu-item + .gpu-item { border-top-color: var(--border); }
-  .system-panel { border-bottom-color: var(--border); }
-  .gpu-name,
-  .system-title,
-  .system-metric-value,
-  .settings-row,
-  .settings-title,
-  .server-card-title,
-  .server-input,
-  #ui-tooltip,
-  .watch-btn .watch-tooltip { color: var(--text); }
-  .bar-track,
-  .stat,
-  .system-metric,
-  .mode-toggle,
-  .theme-toggle,
-  .settings-close,
-  .settings-action,
-  .interval-select,
-  #ui-tooltip,
-  .watch-btn .watch-tooltip { background: var(--surface-muted); }
-  .interval-select { color: var(--text-muted); }
-  .toggle-knob,
-  .mode-toggle button.active,
-  .theme-toggle button.active,
-  .user-tag { background: var(--border); }
-  .toggle-knob::after { background: var(--text-muted); }
-  .toggle-switch input:checked ~ .toggle-label { color: var(--text); }
-  .global-watch-btn,
-  .drag-handle,
-  .collapse-arrow,
-  .watch-btn,
+  /* Theme-aware overrides that differ from the base rules */
   .settings-section-title,
   .system-metric-name,
   .system-metric-sub,
@@ -1255,25 +1153,22 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   .server-save-status,
   .settings-subtitle,
   .settings-note { color: var(--icon-muted); }
-  .badge-ok,
-  .temp-cool { background: var(--success-bg); color: var(--success-text); }
-  .badge-no_gpu,
-  .temp-warm { background: var(--warning-bg); color: var(--warning-text); }
-  .badge-error,
-  .temp-hot { background: var(--error-bg); color: var(--error-text); }
-  .badge-tpu { background: var(--tpu-bg); color: var(--tpu-text); }
-  .badge-local,
-  .user-tag.current-user { background: var(--local-bg); color: var(--local-text); }
-  .error-msg { color: var(--error-text); }
-  .no-gpu-msg { color: var(--warning-text); }
-  .user-tag { color: var(--text-muted); }
-  #ui-tooltip { box-shadow: var(--shadow-tooltip); }
-  .watch-btn .watch-tooltip { box-shadow: var(--shadow-popover); }
-  .btn-refresh,
-  .settings-button { color: var(--text); }
-  .spinner {
-    border-color: var(--border);
-    border-top-color: var(--local-text);
+
+  /* Responsive */
+  @media (max-width: 960px) {
+    body { padding: 16px; }
+    .header { flex-wrap: wrap; gap: 10px; }
+    .header-right { flex-wrap: wrap; gap: 8px; row-gap: 8px; }
+    .host-grid, body.compact .host-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+  }
+  @media (max-width: 640px) {
+    body { padding: 10px; }
+    .header h1 { font-size: 22px; }
+    .host-grid, body.compact .host-grid { grid-template-columns: 1fr; }
+    .summary-bar { gap: 10px; }
+    .summary-card { min-width: calc(50% - 5px); padding: 12px 16px; }
+    .summary-card .value { font-size: 22px; }
+    .system-grid { grid-template-columns: 1fr; }
   }
 
 </style>
@@ -1297,36 +1192,36 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   <div class="header-right">
     <span class="status-text" id="update-time"></span>
     <div class="header-divider"></div>
-    <div class="theme-toggle" id="theme-toggle" data-tip="Switch dashboard theme">
-      <button onclick="setTheme('dark')" id="theme-dark">Dark</button>
-      <button onclick="setTheme('light')" id="theme-light">Light</button>
+    <div class="theme-toggle" id="theme-toggle" data-tip="切换界面主题">
+      <button onclick="setTheme('dark')" id="theme-dark">深色</button>
+      <button onclick="setTheme('light')" id="theme-light">浅色</button>
     </div>
     <div class="header-divider"></div>
     <div class="mode-toggle" id="mode-toggle">
-      <button onclick="setMode('compact')" id="mode-compact" data-tip="Compact view: smaller cards, hide host details">Compact</button>
-      <button onclick="setMode('normal')" id="mode-normal" data-tip="Expand view: full cards with all GPU details">Expand</button>
+      <button onclick="setMode('compact')" id="mode-compact" data-tip="紧凑视图：卡片更小，隐藏主机详情">紧凑</button>
+      <button onclick="setMode('normal')" id="mode-normal" data-tip="展开视图：完整卡片，显示全部 GPU 详情">展开</button>
     </div>
     <div class="header-divider"></div>
-    <label class="toggle-switch" data-tip="Enable GPU availability notifications. Use the 🔔 bell on each card to select which hosts to watch.">
+    <label class="toggle-switch" data-tip="开启 GPU 空闲通知。用每张卡片上的 🔔 铃铛选择要监控的主机。">
       <input type="checkbox" id="notify-toggle" onchange="setNotifyEnabled(this.checked)">
       <span class="toggle-knob"></span>
-      <span class="toggle-label">&#128276; Notify</span>
+      <span class="toggle-label">&#128276; 通知</span>
     </label>
-    <button class="global-watch-btn" id="global-watch-btn" onclick="toggleGlobalWatch()" data-tip="Watch all hosts — notify when any GPU becomes free">&#128277;</button>
+    <button class="global-watch-btn" id="global-watch-btn" onclick="toggleGlobalWatch()" data-tip="监控所有主机 — 任一 GPU 空闲时通知">&#128277;</button>
     <div class="header-divider"></div>
-    <label class="toggle-switch" data-tip="Auto-refresh: automatically fetch latest GPU data at the selected interval">
+    <label class="toggle-switch" data-tip="自动刷新：按所选间隔自动获取最新 GPU 数据">
       <input type="checkbox" id="auto-refresh" checked>
       <span class="toggle-knob"></span>
-      <span class="toggle-label">Auto Refresh</span>
+      <span class="toggle-label">自动刷新</span>
     </label>
-    <select class="interval-select" id="interval-select" onchange="setInterval_(this.value)" data-tip="Auto-refresh interval">
-      <option value="5">5s</option>
-      <option value="10">10s</option>
-      <option value="30" selected>30s</option>
-      <option value="300">5min</option>
+    <select class="interval-select" id="interval-select" onchange="setInterval_(this.value)" data-tip="自动刷新间隔">
+      <option value="5">5 秒</option>
+      <option value="10">10 秒</option>
+      <option value="30" selected>30 秒</option>
+      <option value="300">5 分钟</option>
     </select>
-    <button class="btn-refresh" id="btn-refresh" onclick="refresh()">Refresh</button>
-    <button class="settings-button" id="settings-button" onclick="toggleSettings(true)" aria-label="Open settings" data-tip="Open settings">
+    <button class="btn-refresh" id="btn-refresh" onclick="refresh()">刷新</button>
+    <button class="settings-button" id="settings-button" onclick="toggleSettings(true)" aria-label="打开设置" data-tip="打开设置">
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M19.43 12.98c.04-.32.07-.65.07-.98s-.02-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.37-.31-.6-.22l-2.49 1a7.2 7.2 0 0 0-1.69-.98L14.5 2.42A.5.5 0 0 0 14 2h-4a.5.5 0 0 0-.49.42L9.13 5.07c-.6.24-1.17.57-1.69.98l-2.49-1a.5.5 0 0 0-.6.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65c-.04.32-.08.65-.08.98s.03.66.08.98l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46c.12.22.37.31.6.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.04.24.25.42.49.42h4c.24 0 .45-.18.49-.42l.38-2.65c.6-.24 1.17-.57 1.69-.98l2.49 1c.23.08.48 0 .6-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"/>
       </svg>
@@ -1471,27 +1366,26 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   <div class="history-modal" onclick="event.stopPropagation()">
     <div class="history-head">
       <div>
-        <div class="history-title" id="history-title">History</div>
-        <div class="history-subtitle" id="history-subtitle">Persistent samples are retained for 7 days.</div>
+        <div class="history-title" id="history-title">历史</div>
+        <div class="history-subtitle" id="history-subtitle">采样数据保留 7 天。</div>
       </div>
-      <button class="history-close" onclick="closeHistory()" aria-label="Close history">&times;</button>
+      <button class="history-close" onclick="closeHistory()" aria-label="关闭历史">&times;</button>
     </div>
     <div class="history-controls">
-      <button class="history-range active" data-range="1h" onclick="setHistoryRange('1h')">1h</button>
-      <button class="history-range" data-range="6h" onclick="setHistoryRange('6h')">6h</button>
-      <button class="history-range" data-range="24h" onclick="setHistoryRange('24h')">24h</button>
-      <button class="history-range" data-range="7d" onclick="setHistoryRange('7d')">7d</button>
+      <button class="history-range active" data-range="1h" onclick="setHistoryRange('1h')">1 小时</button>
+      <button class="history-range" data-range="6h" onclick="setHistoryRange('6h')">6 小时</button>
+      <button class="history-range" data-range="24h" onclick="setHistoryRange('24h')">24 小时</button>
+      <button class="history-range" data-range="7d" onclick="setHistoryRange('7d')">7 天</button>
     </div>
     <div class="history-chart" id="history-chart">
-      <div class="history-empty">Select a host to view history.</div>
+      <div class="history-empty">请选择一台主机查看历史。</div>
     </div>
   </div>
 </div>
 
-<div id="ui-tooltip"></div>
 <div class="summary-bar" id="summary-bar"></div>
 <div id="content">
-  <div class="loading"><div class="spinner"></div><br>Connecting to hosts...</div>
+  <div class="loading"><div class="spinner"></div><br>正在连接主机…</div>
 </div>
 
 <script>
@@ -1856,9 +1750,9 @@ async function testServerConfig(index) {
     if (!statusEl) return;
     if (data.status === 'ok') {
       const count = (data.gpus || []).length;
-      const unit = data.is_tpu ? ' TPU chip' : ' GPU';
+      const unit = data.is_tpu ? ' 个 TPU 芯片' : ' 个 GPU';
       const first = data.gpus && data.gpus[0] ? data.gpus[0].name : '';
-      statusEl.textContent = '连接成功 · ' + count + unit + (count !== 1 ? 's' : '') + (first ? ' · ' + first : '');
+      statusEl.textContent = '连接成功 · ' + count + unit + (first ? ' · ' + first : '');
       statusEl.classList.add('ok');
     } else if (data.status === 'no_gpu') {
       statusEl.textContent = '连接成功，但未检测到加速器：' + (data.error || '未知原因');
@@ -2139,47 +2033,51 @@ function _applyHostOrder(list) {
   });
 }
 
-function _setupDrag(grid) {
-  let dragSrc = null;
-  grid.querySelectorAll('.host-card').forEach(card => {
-    const handle = card.querySelector('.drag-handle');
-    if (handle) {
-      handle.setAttribute('draggable', 'true');
-      handle.addEventListener('dragstart', e => {
-        dragSrc = card;
-        card.classList.add('dragging');
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setDragImage(card, 0, 0);
-        e.stopPropagation();
-      });
-      handle.addEventListener('dragend', () => {
-        card.classList.remove('dragging');
-        grid.querySelectorAll('.host-card').forEach(c => c.classList.remove('drag-over'));
+let _dragSrc = null;
+function _attachDrag(card) {
+  const handle = card.querySelector('.drag-handle');
+  if (handle) {
+    handle.setAttribute('draggable', 'true');
+    handle.addEventListener('dragstart', e => {
+      _dragSrc = card;
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setDragImage(card, 0, 0);
+      e.stopPropagation();
+    });
+    handle.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      const grid = card.parentElement;
+      if (grid) grid.querySelectorAll('.host-card').forEach(c => c.classList.remove('drag-over'));
+      if (grid && grid.classList.contains('host-grid')) {
         hostOrder = [...grid.querySelectorAll('.host-card')].map(c => c.dataset.alias);
         localStorage.setItem('gnvitop-order', JSON.stringify(hostOrder));
-      });
+      }
+      _dragSrc = null;
+    });
+  }
+  card.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const grid = card.parentElement;
+    if (_dragSrc && card !== _dragSrc && grid && _dragSrc.parentElement === grid) {
+      grid.querySelectorAll('.host-card').forEach(c => c.classList.remove('drag-over'));
+      card.classList.add('drag-over');
     }
-    card.addEventListener('dragover', e => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      if (card !== dragSrc) {
-        grid.querySelectorAll('.host-card').forEach(c => c.classList.remove('drag-over'));
-        card.classList.add('drag-over');
+  });
+  card.addEventListener('drop', e => {
+    e.preventDefault();
+    const grid = card.parentElement;
+    if (_dragSrc && _dragSrc !== card && grid && _dragSrc.parentElement === grid) {
+      const cards = [...grid.querySelectorAll('.host-card')];
+      const srcIdx = cards.indexOf(_dragSrc);
+      const dstIdx = cards.indexOf(card);
+      if (srcIdx < dstIdx) {
+        grid.insertBefore(_dragSrc, card.nextSibling);
+      } else {
+        grid.insertBefore(_dragSrc, card);
       }
-    });
-    card.addEventListener('drop', e => {
-      e.preventDefault();
-      if (dragSrc && dragSrc !== card) {
-        const cards = [...grid.querySelectorAll('.host-card')];
-        const srcIdx = cards.indexOf(dragSrc);
-        const dstIdx = cards.indexOf(card);
-        if (srcIdx < dstIdx) {
-          grid.insertBefore(dragSrc, card.nextSibling);
-        } else {
-          grid.insertBefore(dragSrc, card);
-        }
-      }
-    });
+    }
   });
 }
 let collapsedHosts = new Set(JSON.parse(localStorage.getItem('gnvitop-collapsed') || '[]'));
@@ -2220,12 +2118,12 @@ function toggleWatch(alias) {
         if (host && host.status === 'ok') {
           const free = host.gpus.filter(g => _gpuAvailable(g));
           if (free.length > 0) {
-            const label = free.map(g => 'GPU ' + g.index + ' (' + Math.round(g.memory_free_mb/1024*10)/10 + 'GB free)').join('<br>');
+            const label = free.map(g => 'GPU ' + g.index + '（空闲 ' + Math.round(g.memory_free_mb/1024*10)/10 + 'GB）').join('<br>');
             tooltip.style.color = 'var(--success-text)';
-            tooltip.innerHTML = free.length + ' GPU' + (free.length>1?'s':'') + ' available:<br>' + label + '<br><span style="color:var(--text-muted)">' + (watching ? 'Click to stop watching' : 'Click to watch') + '</span>';
+            tooltip.innerHTML = free.length + ' 个空闲 GPU：<br>' + label + '<br><span style="color:var(--text-muted)">' + (watching ? '点击停止监控' : '点击监控') + '</span>';
           } else {
             tooltip.style.color = '';
-            tooltip.innerHTML = watching ? 'Watching \u2014 notify on free GPU<br><span style="color:var(--text-muted)">Click to stop</span>' : 'Watch for free GPUs';
+            tooltip.innerHTML = watching ? '监控中 — GPU 空闲时通知<br><span style="color:var(--text-muted)">点击停止</span>' : '监控空闲 GPU';
           }
         }
       }
@@ -2249,8 +2147,8 @@ function checkWatchedNotifications(hosts) {
       const nowAvail = _gpuAvailable(gpu);
       const wasAvail = prevAvailability[key];
       if (nowAvail && wasAvail === false) {
-        new Notification('GPU Available — ' + host.alias, {
-          body: 'GPU ' + gpu.index + ' (' + gpu.name + ')  ' + Math.round(gpu.memory_free_mb / 1024 * 10) / 10 + ' GB free',
+        new Notification('GPU 空闲 — ' + host.alias, {
+          body: 'GPU ' + gpu.index + '（' + gpu.name + '）空闲 ' + Math.round(gpu.memory_free_mb / 1024 * 10) / 10 + ' GB',
           tag: 'gnvitop-' + host.alias + '-' + gpu.index,
         });
       }
@@ -2319,7 +2217,7 @@ function _updateGlobalWatchBtn() {
   const allWatched = aliases.length > 0 && aliases.every(a => watchedHosts.has(a));
   btn.classList.toggle('watching', allWatched);
   btn.textContent = allWatched ? '\uD83D\uDD14' : '\uD83D\uDD15';
-  btn.title = allWatched ? 'Unwatch all hosts' : 'Watch all hosts for free GPUs';
+  btn.title = allWatched ? '取消监控所有主机' : '监控所有主机的空闲 GPU';
   syncSettingsGlobalWatchBtn();
 }
 
@@ -2395,34 +2293,34 @@ function renderSystem(system) {
   if (system.cpu) {
     const c = system.cpu;
     const sub = currentMode === 'compact'
-      ? `${c.cores || 0} cores`
-      : `${c.cores || 0} cores · load ${c.load1 ?? 'N/A'} / ${c.load5 ?? 'N/A'} / ${c.load15 ?? 'N/A'}`;
+      ? `${c.cores || 0} 核`
+      : `${c.cores || 0} 核 · 负载 ${c.load1 ?? 'N/A'} / ${c.load5 ?? 'N/A'} / ${c.load15 ?? 'N/A'}`;
     items.push(renderSystemMetric('CPU', c.usage_pct, `${c.usage_pct ?? 0}%`, sub));
   }
   if (system.memory) {
     const m = system.memory;
     const sub = currentMode === 'compact'
-      ? `${formatBytes(m.available_bytes)} free`
-      : `${formatBytes(m.used_bytes)} used / ${formatBytes(m.total_bytes)}`;
-    items.push(renderSystemMetric('Memory', m.usage_pct, `${m.usage_pct ?? 0}%`, sub));
+      ? `空闲 ${formatBytes(m.available_bytes)}`
+      : `${formatBytes(m.used_bytes)} / ${formatBytes(m.total_bytes)}`;
+    items.push(renderSystemMetric('内存', m.usage_pct, `${m.usage_pct ?? 0}%`, sub));
   }
   if (system.disk) {
     const d = system.disk;
     const sub = currentMode === 'compact'
-      ? `${formatBytes(d.free_bytes)} free`
-      : `${formatBytes(d.used_bytes)} used / ${formatBytes(d.total_bytes)} on ${d.mount || d.path || '~'}`;
-    items.push(renderSystemMetric('Disk', d.usage_pct, `${d.usage_pct ?? 0}%`, sub));
+      ? `空闲 ${formatBytes(d.free_bytes)}`
+      : `${formatBytes(d.used_bytes)} / ${formatBytes(d.total_bytes)} · ${d.mount || d.path || '~'}`;
+    items.push(renderSystemMetric('硬盘', d.usage_pct, `${d.usage_pct ?? 0}%`, sub));
   }
   if (!items.length) return '';
-  return `<div class="system-panel"><div class="system-title">System</div><div class="system-grid">${items.join('')}</div></div>`;
+  return `<div class="system-panel"><div class="system-title">系统</div><div class="system-grid">${items.join('')}</div></div>`;
 }
 
 function compactSystemText(system) {
   if (!system) return '';
   const parts = [];
   if (system.cpu) parts.push(`CPU ${system.cpu.usage_pct ?? 0}%`);
-  if (system.memory) parts.push(`Mem ${system.memory.usage_pct ?? 0}%`);
-  if (system.disk) parts.push(`Disk ${system.disk.usage_pct ?? 0}%`);
+  if (system.memory) parts.push(`内存 ${system.memory.usage_pct ?? 0}%`);
+  if (system.disk) parts.push(`硬盘 ${system.disk.usage_pct ?? 0}%`);
   return parts.join(' · ');
 }
 
@@ -2458,23 +2356,23 @@ function openHistory(alias) {
   const subtitle = document.getElementById('history-subtitle');
   const chart = document.getElementById('history-chart');
   const host = lastData && lastData.hosts ? lastData.hosts.find(h => h.alias === alias) : null;
-  if (title) title.textContent = alias + ' History';
-  if (subtitle) subtitle.textContent = host ? `${host.user}@${host.hostname || alias}` : 'Persistent samples are retained for 7 days.';
-  if (chart) chart.innerHTML = '<div class="history-empty">Loading history...</div>';
+  if (title) title.textContent = alias + ' 历史';
+  if (subtitle) subtitle.textContent = host ? `${host.user}@${host.hostname || alias}` : '采样数据保留 7 天。';
+  if (chart) chart.innerHTML = '<div class="history-empty">正在加载历史…</div>';
   if (overlay) overlay.classList.add('open');
   setHistoryRange(historyRange);
 }
 
 async function loadHistory(alias) {
   const chart = document.getElementById('history-chart');
-  if (chart) chart.innerHTML = '<div class="history-empty">Loading history...</div>';
+  if (chart) chart.innerHTML = '<div class="history-empty">正在加载历史…</div>';
   try {
     const resp = await fetch(`/api/history?host=${encodeURIComponent(alias)}&range=${encodeURIComponent(historyRange)}`);
     const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || 'History request failed');
+    if (!resp.ok) throw new Error(data.error || '历史请求失败');
     renderHistory(data);
   } catch (e) {
-    if (chart) chart.innerHTML = `<div class="history-empty">Failed to load history: ${escapeHtml(e.message)}</div>`;
+    if (chart) chart.innerHTML = `<div class="history-empty">历史加载失败：${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -2488,11 +2386,11 @@ function formatHistoryTime(ts) {
 
 function historySeries(points) {
   const defs = [
-    {key: 'gpu_util_avg', label: 'GPU util', color: '#60a5fa'},
-    {key: 'gpu_memory_free_pct', label: 'GPU free', color: '#22c55e'},
+    {key: 'gpu_util_avg', label: 'GPU 利用率', color: '#60a5fa'},
+    {key: 'gpu_memory_free_pct', label: 'GPU 空闲', color: '#22c55e'},
     {key: 'cpu_pct', label: 'CPU', color: '#f59e0b'},
-    {key: 'memory_pct', label: 'Memory', color: '#a78bfa'},
-    {key: 'disk_pct', label: 'Disk', color: '#f87171'},
+    {key: 'memory_pct', label: '内存', color: '#a78bfa'},
+    {key: 'disk_pct', label: '硬盘', color: '#f87171'},
   ];
   return defs.filter(def => points.some(p => Number.isFinite(Number(p[def.key]))));
 }
@@ -2580,12 +2478,12 @@ function renderHistory(data) {
   if (!chart) return;
   const points = data.points || [];
   if (!points.length) {
-    chart.innerHTML = '<div class="history-empty">No history yet. Data will appear after the next refresh samples are recorded.</div>';
+    chart.innerHTML = '<div class="history-empty">暂无历史数据，将在下次刷新采样后显示。</div>';
     return;
   }
   const series = historySeries(points);
   if (!series.length) {
-    chart.innerHTML = '<div class="history-empty">History exists for this host, but no enabled numeric metrics were recorded.</div>';
+    chart.innerHTML = '<div class="history-empty">该主机已有历史数据，但未记录已启用的数值指标。</div>';
     return;
   }
 
@@ -2595,7 +2493,7 @@ function renderHistory(data) {
   const plotH = height - top - bottom;
   const times = points.map(p => Number(p.timestamp)).filter(Number.isFinite);
   if (!times.length) {
-    chart.innerHTML = '<div class="history-empty">History data is missing timestamps.</div>';
+    chart.innerHTML = '<div class="history-empty">历史数据缺少时间戳。</div>';
     return;
   }
   const minT = Math.min(...times);
@@ -2631,7 +2529,7 @@ function renderHistory(data) {
   }).join('');
 
   chart.innerHTML = `
-    <svg id="history-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="History trend chart">
+    <svg id="history-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="历史趋势图">
       <rect x="${left}" y="${top}" width="${plotW}" height="${plotH}" fill="transparent"></rect>
       ${grid}
       ${xLabels}
@@ -2661,19 +2559,19 @@ function renderSummary(hosts) {
 
   document.getElementById('summary-bar').innerHTML = `
     <div class="summary-card">
-      <div class="label">Online Hosts</div>
+      <div class="label">在线主机</div>
       <div class="value" style="color:var(--success-text)">${online.length}<span style="color:var(--text-subtle);font-size:16px"> / ${hosts.length}</span></div>
     </div>
     <div class="summary-card">
-      <div class="label">Total GPUs</div>
+      <div class="label">GPU 总数</div>
       <div class="value" style="color:var(--local-text)">${totalGPUs}</div>
     </div>
     <div class="summary-card">
-      <div class="label">Idle GPUs (< 10%)</div>
+      <div class="label">空闲 GPU（&lt; 10%）</div>
       <div class="value" style="color:var(--success-text)">${idleGPUs}</div>
     </div>
     <div class="summary-card">
-      <div class="label">Total Free Memory</div>
+      <div class="label">总空闲显存</div>
       <div class="value" style="color:var(--tpu-text)">${formatMB(totalFree)}</div>
     </div>
   `;
@@ -2699,7 +2597,7 @@ function renderGPU(gpu, hostUser) {
   const isTpu = gpu.gpu_utilization_pct < 0;
   const memPct = isTpu ? 0 : gpu.memory_usage_pct;
   const gpuPct = isTpu ? 0 : gpu.gpu_utilization_pct;
-  const chipLabel = isTpu ? 'Chip' : 'GPU';
+  const chipLabel = isTpu ? '芯片' : 'GPU';
   const gpuPctColor = gpuPct < 10 ? 'var(--success-text)' : gpuPct < 50 ? 'var(--warning-text)' : 'var(--error-text)';
   const memLabel = isTpu
     ? `? / ${formatMB(gpu.memory_total_mb)}`
@@ -2732,14 +2630,14 @@ function renderGPU(gpu, hostUser) {
       </div>
       <div class="bar-container">
         <div class="bar-label">
-          <span>${isTpu ? 'Utilization' : 'GPU Utilization'}</span>
-          <span>${isTpu ? 'N/A (install torch_xla)' : gpuPct + '%'}</span>
+          <span>${isTpu ? '利用率' : 'GPU 利用率'}</span>
+          <span>${isTpu ? 'N/A（需安装 torch_xla）' : gpuPct + '%'}</span>
         </div>
         ${isTpu ? '' : `<div class="bar-track"><div class="bar-fill ${usageClass(gpuPct)}" style="width:${gpuPct}%"></div></div>`}
       </div>
       <div class="bar-container">
         <div class="bar-label">
-          <span>HBM Memory</span>
+          <span>HBM 显存</span>
           <span>${memLabel}</span>
         </div>
         ${isTpu ? '' : `<div class="bar-track"><div class="bar-fill ${usageClass(memPct)}" style="width:${memPct}%"></div></div>`}
@@ -2748,26 +2646,65 @@ function renderGPU(gpu, hostUser) {
       <div class="gpu-stats">
         <div class="stat">
           <div class="stat-value" style="color:var(--text-muted)">${isTpu ? 'N/A' : `<span style="color:${gpuPctColor}">${gpuPct}%</span>`}</div>
-          <div class="stat-label">Utilization</div>
+          <div class="stat-label">利用率</div>
         </div>
         <div class="stat">
           <div class="stat-value">${isTpu ? formatMB(gpu.memory_total_mb) : formatMB(gpu.memory_free_mb)}</div>
-          <div class="stat-label">${isTpu ? 'HBM Total' : 'Free Memory'}</div>
+          <div class="stat-label">${isTpu ? 'HBM 总量' : '空闲显存'}</div>
         </div>
         <div class="stat">
           <div class="stat-value" style="color:var(--text-muted)">${isTpu ? 'N/A' : `${gpu.temperature_c}&deg;C`}</div>
-          <div class="stat-label">Temperature</div>
+          <div class="stat-label">温度</div>
         </div>
       </div>
     </div>
   `;
 }
 
+// Persistent card cache: reuse DOM nodes when a card's rendered HTML is
+// unchanged so refreshes don't wipe hover state, tooltips or drag sessions.
+const _cardCache = new Map(); // alias -> {el, html}
+let _gridMain = null;
+let _gridFolded = null;
+let _foldedDivider = null;
+
+function _cardElement(alias, html, fresh) {
+  const cached = _cardCache.get(alias);
+  if (cached && cached.html === html) return cached.el;
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html.trim();
+  const el = tpl.content.firstElementChild;
+  if (fresh) el.classList.add('first-render');
+  _attachDrag(el);
+  _cardCache.set(alias, {el, html});
+  return el;
+}
+
+function _syncGrid(grid, items) {
+  const wanted = new Set(items.map(i => i.alias));
+  [...grid.children].forEach(child => {
+    if (!wanted.has(child.dataset.alias)) child.remove();
+  });
+  items.forEach(item => {
+    // appendChild moves existing nodes too, so iterating in desired
+    // order also repairs ordering without re-creating any card.
+    grid.appendChild(_cardElement(item.alias, item.html, item.fresh));
+  });
+}
+
+function _resetContentSkeleton() {
+  _gridMain = null;
+  _gridFolded = null;
+  _foldedDivider = null;
+}
+
 function renderHosts(hosts) {
   const container = document.getElementById('content');
   if (!hosts.length) {
     if (isFirstRender) return; // keep showing the initial loading spinner
-    container.innerHTML = '<div class="loading">No hosts found in SSH config.</div>';
+    container.innerHTML = '<div class="loading">未找到可监控的主机。</div>';
+    _resetContentSkeleton();
+    _cardCache.clear();
     return;
   }
 
@@ -2775,10 +2712,15 @@ function renderHosts(hosts) {
     ? hosts.filter(h => h.status === 'ok' || (h.system && Object.keys(h.system).length))
     : hosts;
 
+  if (!filtered.length) {
+    container.innerHTML = '<div class="loading">没有可显示的主机。</div>';
+    _resetContentSkeleton();
+    return;
+  }
+
   // Apply manual drag order if set, otherwise auto-sort
   if (hostOrder.length) {
     filtered = _applyHostOrder(filtered);
-    // Still put collapsed at end within their manual position is preserved
   } else {
   // Sort: active user first, then normal, collapsed always last
   filtered.sort((a, b) => {
@@ -2806,20 +2748,20 @@ function renderHosts(hosts) {
       const gpuHtml = (host.gpus || []).map(g => renderGPU(g, host.user)).join('');
       body = systemHtml + gpuHtml;
     } else if (host.status === 'no_gpu') {
-      body = systemHtml + `<div class="no-gpu-msg">${host.error || 'No NVIDIA GPU detected'}</div>`;
+      body = systemHtml + `<div class="no-gpu-msg">${host.error || '未检测到 NVIDIA GPU'}</div>`;
     } else {
-      body = systemHtml + `<div class="error-msg">${host.error || 'Unknown error'}</div>`;
+      body = systemHtml + `<div class="error-msg">${host.error || '未知错误'}</div>`;
     }
     const isLocal    = host.is_local;
     const isTpu      = !!host.is_tpu;
     const isCollapsed = collapsedHosts.has(host.alias);
     const badgeClass = isLocal ? 'badge-local' : isTpu ? 'badge-tpu' : host.status === 'ok' ? 'badge-ok' : host.status === 'no_gpu' ? 'badge-no_gpu' : 'badge-error';
-    const badgeText  = isLocal ? 'Local' : isTpu ? 'TPU' : host.status === 'ok' ? 'Online' : host.status === 'no_gpu' ? 'No GPU' : 'Offline';
-    const cardClass  = `host-card status-${host.status}${isLocal ? ' is-local' : ''}${isTpu ? ' is-tpu' : ''}${isCollapsed ? ' collapsed' : ''}${wasFirst ? ' first-render' : ''}`;
+    const badgeText  = isLocal ? '本机' : isTpu ? 'TPU' : host.status === 'ok' ? '在线' : host.status === 'no_gpu' ? '无 GPU' : '离线';
+    const cardClass  = `host-card status-${host.status}${isLocal ? ' is-local' : ''}${isTpu ? ' is-tpu' : ''}${isCollapsed ? ' collapsed' : ''}`;
     const collapsedInfo = (isCollapsed && host.status === 'ok')
       ? isTpu
-        ? `<div class="collapsed-info">${host.gpus.length} chip${host.gpus.length !== 1 ? 's' : ''} &nbsp;·&nbsp; ${formatMB(host.gpus[0].memory_total_mb * host.gpus.length)} HBM</div>`
-        : `<div class="collapsed-info">${host.gpus.length} GPU${host.gpus.length !== 1 ? 's' : ''} &nbsp;·&nbsp; Free: ${formatMB(host.gpus.reduce((s, g) => s + g.memory_free_mb, 0))}</div>`
+        ? `<div class="collapsed-info">${host.gpus.length} 个芯片 &nbsp;·&nbsp; ${formatMB(host.gpus[0].memory_total_mb * host.gpus.length)} HBM</div>`
+        : `<div class="collapsed-info">${host.gpus.length} 个 GPU &nbsp;·&nbsp; 空闲：${formatMB(host.gpus.reduce((s, g) => s + g.memory_free_mb, 0))}</div>`
       : '';
     const fallbackCollapsedInfo = (isCollapsed && !collapsedInfo && compactSystemText(host.system))
       ? `<div class="collapsed-info">${compactSystemText(host.system)}</div>`
@@ -2829,7 +2771,7 @@ function renderHosts(hosts) {
       <div class="${cardClass}" data-alias="${alias}">
         <div class="host-header" onclick="toggleCollapse('${alias}')">
           <div class="host-header-left" draggable="false">
-            <span class="drag-handle" title="Drag to reorder" onclick="event.stopPropagation()">&#8942;&#8942;</span>
+            <span class="drag-handle" title="拖拽排序" onclick="event.stopPropagation()">&#8942;&#8942;</span>
             <div>
               <div class="host-name">${host.alias}</div>
               <div class="host-info">${host.user}@${host.hostname}${host.port ? ':' + host.port : ''}</div>
@@ -2837,16 +2779,16 @@ function renderHosts(hosts) {
             </div>
           </div>
           <div class="host-header-right">
-            <button class="history-btn" draggable="false" data-tip="View 7-day history trends" onclick="event.stopPropagation(); openHistory('${alias}')">${historyButtonIcon()}</button>
+            <button class="history-btn" draggable="false" data-tip="查看 7 天历史趋势" onclick="event.stopPropagation(); openHistory('${alias}')">${historyButtonIcon()}</button>
             <button class="watch-btn${watchedHosts.has(host.alias) ? ' watching' : ''}" draggable="false" onclick="event.stopPropagation(); toggleWatch('${alias}')">${watchedHosts.has(host.alias) ? '&#128276;' : '&#128277;'}${(() => {
-              if (host.status !== 'ok') return '<span class="watch-tooltip">Watch this host</span>';
+              if (host.status !== 'ok') return '<span class="watch-tooltip">监控此主机</span>';
               const free = host.gpus.filter(g => _gpuAvailable(g));
               const watching = watchedHosts.has(host.alias);
               if (free.length > 0) {
-                const label = free.map(g => 'GPU ' + g.index + ' (' + Math.round(g.memory_free_mb/1024*10)/10 + 'GB free)').join('<br>');
-                return '<span class="watch-tooltip" style="color:var(--success-text)">' + free.length + ' GPU' + (free.length>1?'s':'') + ' available:<br>' + label + (watching ? '<br><span style="color:var(--text-muted)">Click to stop watching</span>' : '<br><span style="color:var(--text-muted)">Click to watch</span>') + '</span>';
+                const label = free.map(g => 'GPU ' + g.index + '（空闲 ' + Math.round(g.memory_free_mb/1024*10)/10 + 'GB）').join('<br>');
+                return '<span class="watch-tooltip" style="color:var(--success-text)">' + free.length + ' 个空闲 GPU：<br>' + label + (watching ? '<br><span style="color:var(--text-muted)">点击停止监控</span>' : '<br><span style="color:var(--text-muted)">点击监控</span>') + '</span>';
               }
-              return '<span class="watch-tooltip">' + (watching ? 'Watching — notify on free GPU<br><span style="color:#94a3b8">Click to stop</span>' : 'Watch for free GPUs') + '</span>';
+              return '<span class="watch-tooltip">' + (watching ? '监控中 — GPU 空闲时通知<br><span style="color:var(--text-muted)">点击停止</span>' : '监控空闲 GPU') + '</span>';
             })()}</button>
             <span class="status-badge ${badgeClass}">${badgeText}</span>
             <span class="collapse-arrow">&#9660;</span>
@@ -2857,18 +2799,41 @@ function renderHosts(hosts) {
     `;
   }
 
-  let html = '<div class="host-grid">' + expanded.map(renderCard).join('') + '</div>';
-
-  if (collapsed.length) {
-    html += `
-      <div class="folded-divider">
-        <span class="folded-label">&#9660; Folded (${collapsed.length})</span>
-      </div>
-      <div class="host-grid host-grid-folded">` + collapsed.map(renderCard).join('') + '</div>';
+  // Ensure the persistent skeleton (main grid + optional folded section)
+  if (!_gridMain || !container.contains(_gridMain)) {
+    container.innerHTML = '';
+    _gridMain = document.createElement('div');
+    _gridMain.className = 'host-grid';
+    container.appendChild(_gridMain);
+    _foldedDivider = null;
+    _gridFolded = null;
   }
 
-  container.innerHTML = html;
-  container.querySelectorAll('.host-grid').forEach(g => _setupDrag(g));
+  _syncGrid(_gridMain, expanded.map(h => ({alias: h.alias, html: renderCard(h), fresh: wasFirst})));
+
+  if (collapsed.length) {
+    if (!_foldedDivider) {
+      _foldedDivider = document.createElement('div');
+      _foldedDivider.className = 'folded-divider';
+      _foldedDivider.innerHTML = '<span class="folded-label"></span>';
+      container.appendChild(_foldedDivider);
+    }
+    _foldedDivider.firstElementChild.innerHTML = '&#9660; 已折叠 (' + collapsed.length + ')';
+    if (!_gridFolded) {
+      _gridFolded = document.createElement('div');
+      _gridFolded.className = 'host-grid host-grid-folded';
+      container.appendChild(_gridFolded);
+    }
+    _syncGrid(_gridFolded, collapsed.map(h => ({alias: h.alias, html: renderCard(h), fresh: wasFirst})));
+  } else {
+    if (_foldedDivider) { _foldedDivider.remove(); _foldedDivider = null; }
+    if (_gridFolded) { _gridFolded.remove(); _gridFolded = null; }
+  }
+
+  // Drop cache entries for hosts that no longer exist
+  const alive = new Set(hosts.map(h => h.alias));
+  _cardCache.forEach((_, alias) => { if (!alive.has(alias)) _cardCache.delete(alias); });
+
   _updateGlobalWatchBtn();
 }
 
@@ -2913,7 +2878,7 @@ function initStream() {
         updateTime(data.updated_at);
       }).catch(() => {
         document.getElementById('content').innerHTML =
-          '<div class="loading" style="color:#f87171">Failed to connect to server.</div>';
+          '<div class="loading" style="color:var(--error-text)">无法连接到服务器。</div>';
       });
     }
   };
@@ -2930,7 +2895,7 @@ function flashRefreshBtn() {
 async function refresh() {
   const btn = document.getElementById('btn-refresh');
   btn.disabled = true;
-  btn.textContent = 'Refreshing...';
+  btn.textContent = '刷新中…';
   flashRefreshBtn();
   try {
     lastData = await fetchData(true);
@@ -2941,13 +2906,13 @@ async function refresh() {
     console.error(e);
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Refresh';
+    btn.textContent = '刷新';
   }
 }
 
 function updateTime(ts) {
   const d = new Date(ts * 1000);
-  document.getElementById('update-time').textContent = 'Updated: ' + d.toLocaleTimeString();
+  document.getElementById('update-time').textContent = '更新于 ' + d.toLocaleTimeString();
 }
 
 async function init() {
