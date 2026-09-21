@@ -7,6 +7,7 @@ import getpass
 import hashlib
 import hmac
 import json
+import math
 import os
 import re
 import shlex
@@ -21,6 +22,7 @@ import paramiko
 
 from . import __version__
 from .dashboard import DASHBOARD_HTML
+from .history import HistoryStore
 
 app = Flask(__name__)
 
@@ -146,7 +148,7 @@ cache = {"data": [], "last_update": 0}
 cache_lock = threading.Lock()
 CACHE_TTL = 30
 history_lock = threading.Lock()
-_history_last_prune = 0
+_history_store = None
 
 # Background refresh state
 _bg_refresh_running = False
@@ -1247,7 +1249,8 @@ def _sort_results(results):
 
 def _as_float(value):
     try:
-        return float(value)
+        number = float(value)
+        return number if math.isfinite(number) else None
     except (TypeError, ValueError):
         return None
 
@@ -1260,10 +1263,17 @@ def _round_or_none(value, digits=1):
 def _history_sample(host, timestamp):
     gpus = host.get("gpus") or []
     gpu_utils = []
+    gpu_temperatures = {}
     for gpu in gpus:
         util = _as_float(gpu.get("gpu_utilization_pct"))
         if util is not None and util >= 0:
             gpu_utils.append(util)
+        temperature = _as_float(gpu.get("temperature_c"))
+        index = gpu.get("index")
+        if index is not None:
+            gpu_temperatures[str(index)] = (
+                round(temperature, 1) if temperature is not None and temperature >= 0 else None
+            )
     mem_totals = [_as_float(g.get("memory_total_mb")) or 0 for g in gpus]
     mem_free = [_as_float(g.get("memory_free_mb")) for g in gpus]
     valid_mem_free = [v for v in mem_free if v is not None and v >= 0]
@@ -1281,6 +1291,7 @@ def _history_sample(host, timestamp):
         "is_local": bool(host.get("is_local")),
         "gpu_count": len(gpus),
         "gpu_util_avg": round(sum(gpu_utils) / len(gpu_utils), 1) if gpu_utils else None,
+        "gpu_temperatures_c": gpu_temperatures,
         "gpu_memory_free_mb": round(gpu_memory_free, 1) if gpu_memory_total and valid_mem_free else None,
         "gpu_memory_free_pct": round(gpu_memory_free / gpu_memory_total * 100, 1) if gpu_memory_total and valid_mem_free else None,
         "cpu_pct": _round_or_none(cpu.get("usage_pct")),
@@ -1289,36 +1300,19 @@ def _history_sample(host, timestamp):
     }
 
 
-def _prune_history_locked(now):
-    cutoff = now - HISTORY_RETENTION_SECONDS
-    if not os.path.exists(HISTORY_PATH):
-        return
-    tmp_path = HISTORY_PATH + ".tmp"
-    try:
-        with open(HISTORY_PATH, "r", encoding="utf-8") as src, open(tmp_path, "w", encoding="utf-8") as dst:
-            for line in src:
-                try:
-                    item = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                timestamp = _as_float(item.get("timestamp"))
-                if timestamp is not None and timestamp >= cutoff:
-                    dst.write(json.dumps(item, separators=(",", ":")) + "\n")
-        os.replace(tmp_path, HISTORY_PATH)
-    except OSError:
-        try:
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
-        except OSError:
-            pass
+def _get_history_store():
+    global _history_store
+    with history_lock:
+        if _history_store is None or _history_store.legacy_path != os.fspath(HISTORY_PATH):
+            _history_store = HistoryStore(HISTORY_PATH, HISTORY_RETENTION_SECONDS, HISTORY_PRUNE_INTERVAL)
+        return _history_store
 
 
 def record_history(results, timestamp=None):
     """Append compact host samples to persistent history and retain seven days."""
-    global _history_last_prune
     if not results:
         return
-    now = timestamp or time.time()
+    now = time.time() if timestamp is None else timestamp
     samples = [
         _history_sample(host, now)
         for host in results
@@ -1326,47 +1320,13 @@ def record_history(results, timestamp=None):
     ]
     if not samples:
         return
-    with history_lock:
-        os.makedirs(os.path.dirname(HISTORY_PATH), exist_ok=True)
-        with open(HISTORY_PATH, "a", encoding="utf-8") as f:
-            for sample in samples:
-                f.write(json.dumps(sample, separators=(",", ":")) + "\n")
-        if now - _history_last_prune > HISTORY_PRUNE_INTERVAL:
-            _prune_history_locked(now)
-            _history_last_prune = now
-
-
-def _downsample_history(points):
-    if len(points) <= HISTORY_MAX_POINTS:
-        return points
-    step = max(1, (len(points) + HISTORY_MAX_POINTS - 1) // HISTORY_MAX_POINTS)
-    sampled = points[::step]
-    if sampled[-1] is not points[-1]:
-        sampled.append(points[-1])
-    return sampled
+    _get_history_store().record(samples, now)
 
 
 def load_history(alias, range_key):
     seconds = HISTORY_RANGES.get(range_key, HISTORY_RANGES["1h"])
     cutoff = time.time() - seconds
-    points = []
-    with history_lock:
-        if not os.path.exists(HISTORY_PATH):
-            return []
-        with open(HISTORY_PATH, "r", encoding="utf-8") as f:
-            for line in f:
-                try:
-                    item = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if item.get("alias") != alias:
-                    continue
-                timestamp = _as_float(item.get("timestamp"))
-                if timestamp is None or timestamp < cutoff:
-                    continue
-                points.append(item)
-    points.sort(key=lambda item: item.get("timestamp", 0))
-    return _downsample_history(points)
+    return _get_history_store().load(alias, cutoff, HISTORY_MAX_POINTS)
 
 
 def discover_gadi_nodes(hosts_by_alias):
@@ -1658,6 +1618,14 @@ def _trigger_background_refresh():
 
 def _start_background_warmer():
     """Background thread that keeps cache warm by refreshing every CACHE_TTL seconds."""
+    def _prepare_history():
+        try:
+            _get_history_store().prepare()
+        except Exception:
+            app.logger.exception("Could not prepare history storage")
+
+    threading.Thread(target=_prepare_history, daemon=True).start()
+
     def _warmer():
         # Initial warm-up: start immediately so first page load hits cached data
         _do_background_refresh()

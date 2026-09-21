@@ -137,6 +137,7 @@ Host tpu-v4-8
 - **User highlight** — your own processes are highlighted in blue for quick identification
 - **Agent mode** — `gnvitop --agent` outputs structured JSON for use in scripts and AI agents
 - **History recording** — `gnvitop --history` records GPU stats to CSV for trend analysis
+- **Dashboard history** — keeps seven days of GPU utilization, free GPU memory, CPU, memory, disk, and each GPU's temperature. Temperature curves and tooltips are labeled by GPU index (GPU 0, GPU 1, etc.), with a Celsius axis. Indexed SQLite queries load only the selected host and time range. On the first launch after upgrading, existing `~/.gnvitop/history.jsonl` samples are imported into `~/.gnvitop/history.sqlite3`; the original file is preserved. This one-time import may take a little while for large histories. New samples are saved to SQLite. Per-GPU temperature history starts with the first new sample; missing or older aggregate readings cannot be reconstructed into per-GPU temperatures.
 - **TUI mode** — `gnvitop --tui` for a terminal UI without a browser
 - **Auto browser** — opens dashboard in your browser on start
 - **Adjustable refresh** — choose 5s / 10s / 30s / 5min auto-refresh interval

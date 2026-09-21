@@ -1430,6 +1430,7 @@ let localDiskPath = '~';
 let serverSaveTimer = null;
 let historyHost = null;
 let historyRange = '1h';
+let historyRequest = null;
 
 function setTheme(theme) {
   currentTheme = theme === 'light' ? 'light' : 'dark';
@@ -2332,6 +2333,8 @@ function historyButtonIcon() {
 }
 
 function closeHistory() {
+  if (historyRequest) historyRequest.abort();
+  historyRequest = null;
   const overlay = document.getElementById('history-overlay');
   if (overlay) overlay.classList.remove('open');
 }
@@ -2364,15 +2367,23 @@ function openHistory(alias) {
 }
 
 async function loadHistory(alias) {
+  if (historyRequest) historyRequest.abort();
+  const controller = new AbortController();
+  historyRequest = controller;
+  const range = historyRange;
   const chart = document.getElementById('history-chart');
   if (chart) chart.innerHTML = '<div class="history-empty">正在加载历史…</div>';
   try {
-    const resp = await fetch(`/api/history?host=${encodeURIComponent(alias)}&range=${encodeURIComponent(historyRange)}`);
+    const resp = await fetch(`/api/history?host=${encodeURIComponent(alias)}&range=${encodeURIComponent(range)}`, {signal: controller.signal});
     const data = await resp.json();
+    if (historyRequest !== controller) return;
     if (!resp.ok) throw new Error(data.error || '历史请求失败');
     renderHistory(data);
   } catch (e) {
+    if (e.name === 'AbortError' || historyRequest !== controller) return;
     if (chart) chart.innerHTML = `<div class="history-empty">历史加载失败：${escapeHtml(e.message)}</div>`;
+  } finally {
+    if (historyRequest === controller) historyRequest = null;
   }
 }
 
@@ -2384,15 +2395,44 @@ function formatHistoryTime(ts) {
   return d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
 }
 
+function historyValue(point, key) {
+  const isGpuTemperature = key.startsWith('gpu_temp:');
+  const value = isGpuTemperature ? (point.gpu_temperatures_c || {})[key.slice(9)] : point[key];
+  if (value === null || value === undefined || value === '') return NaN;
+  const number = Number(value);
+  return isGpuTemperature && number < 0 ? NaN : number;
+}
+
 function historySeries(points) {
   const defs = [
-    {key: 'gpu_util_avg', label: 'GPU 利用率', color: '#60a5fa'},
-    {key: 'gpu_memory_free_pct', label: 'GPU 空闲', color: '#22c55e'},
-    {key: 'cpu_pct', label: 'CPU', color: '#f59e0b'},
-    {key: 'memory_pct', label: '内存', color: '#a78bfa'},
-    {key: 'disk_pct', label: '硬盘', color: '#f87171'},
+    {key: 'gpu_util_avg', label: 'GPU 利用率', color: '#60a5fa', unit: '%'},
+    {key: 'gpu_memory_free_pct', label: 'GPU 空闲', color: '#22c55e', unit: '%'},
+    {key: 'cpu_pct', label: 'CPU', color: '#f59e0b', unit: '%'},
+    {key: 'memory_pct', label: '内存', color: '#a78bfa', unit: '%'},
+    {key: 'disk_pct', label: '硬盘', color: '#f87171', unit: '%'},
   ];
-  return defs.filter(def => points.some(p => Number.isFinite(Number(p[def.key]))));
+  const indices = new Set();
+  points.forEach(point => {
+    Object.keys(point.gpu_temperatures_c || {}).forEach(index => {
+      if (/^(0|[1-9]\d*)$/.test(index) && Number.isSafeInteger(Number(index))) indices.add(index);
+    });
+  });
+  const temperatureDefs = Array.from(indices).sort((a, b) => Number(a) - Number(b)).map(index => ({
+    key: `gpu_temp:${index}`,
+    label: `GPU ${index} 温度`,
+    color: `hsl(${(190 + Number(index) * 137.508) % 360}, 80%, 65%)`,
+    unit: '°C',
+  }));
+  if (temperatureDefs.length) {
+    defs.push(...temperatureDefs);
+  } else {
+    // Older aggregate readings cannot be attributed to an individual GPU.
+    defs.push(
+      {key: 'gpu_temp_avg_c', label: 'GPU 平均温度（旧记录）', color: '#22d3ee', unit: '°C'},
+      {key: 'gpu_temp_max_c', label: 'GPU 最高温度（旧记录）', color: '#fb923c', unit: '°C'},
+    );
+  }
+  return defs.filter(def => points.some(p => Number.isFinite(historyValue(p, def.key))));
 }
 
 function formatHistoryTooltipTime(ts) {
@@ -2437,18 +2477,18 @@ function updateHistoryHover(event, hoverData) {
   }
   if (hoverDots) {
     hoverDots.innerHTML = hoverData.series.map(def => {
-      const value = Number(best[def.key]);
+      const value = historyValue(best, def.key);
       if (!Number.isFinite(value)) return '';
-      return `<circle cx="${x.toFixed(1)}" cy="${hoverData.yFor(value).toFixed(1)}" r="4.2" fill="${def.color}" stroke="var(--surface)" stroke-width="2"></circle>`;
+      return `<circle cx="${x.toFixed(1)}" cy="${hoverData.yFor(value, def).toFixed(1)}" r="4.2" fill="${def.color}" stroke="var(--surface)" stroke-width="2"></circle>`;
     }).join('');
   }
 
   const rows = hoverData.series.map(def => {
-    const value = Number(best[def.key]);
+    const value = historyValue(best, def.key);
     if (!Number.isFinite(value)) return '';
     return `<div class="history-tooltip-row">
       <span class="history-tooltip-label"><span class="history-dot" style="background:${def.color}"></span>${def.label}</span>
-      <strong>${value.toFixed(1)}%</strong>
+      <strong>${value.toFixed(1)}${def.unit}</strong>
     </div>`;
   }).join('');
   tooltip.innerHTML = `<div class="history-tooltip-title">${formatHistoryTooltipTime(best.timestamp)}</div>${rows}`;
@@ -2488,10 +2528,11 @@ function renderHistory(data) {
   }
 
   const width = 760, height = 280;
-  const left = 42, right = 18, top = 18, bottom = 34;
+  const hasTemperature = series.some(def => def.unit === '°C');
+  const left = 42, right = hasTemperature ? 46 : 18, top = 24, bottom = 34;
   const plotW = width - left - right;
   const plotH = height - top - bottom;
-  const times = points.map(p => Number(p.timestamp)).filter(Number.isFinite);
+  const times = points.map(p => historyValue(p, 'timestamp')).filter(Number.isFinite);
   if (!times.length) {
     chart.innerHTML = '<div class="history-empty">历史数据缺少时间戳。</div>';
     return;
@@ -2500,12 +2541,24 @@ function renderHistory(data) {
   const maxT = Math.max(...times);
   const span = Math.max(maxT - minT, 1);
   const xFor = ts => left + ((Number(ts) - minT) / span) * plotW;
-  const yFor = value => top + (100 - Math.max(0, Math.min(100, Number(value)))) / 100 * plotH;
-  const validPoints = points.filter(p => Number.isFinite(Number(p.timestamp)));
+  let temperatureMax = 100;
+  const temperatureSeries = series.filter(def => def.unit === '°C');
+  points.forEach(p => {
+    temperatureSeries.forEach(def => {
+      const value = historyValue(p, def.key);
+      if (Number.isFinite(value)) temperatureMax = Math.max(temperatureMax, Math.ceil(value / 20) * 20);
+    });
+  });
+  const yFor = (value, def) => {
+    const max = def && def.unit === '°C' ? temperatureMax : 100;
+    return top + (1 - Math.max(0, Math.min(max, Number(value))) / max) * plotH;
+  };
+  const validPoints = points.filter(p => Number.isFinite(historyValue(p, 'timestamp')));
   const grid = [0, 25, 50, 75, 100].map(v => {
     const y = yFor(v);
     return `<line x1="${left}" y1="${y}" x2="${width - right}" y2="${y}" stroke="var(--border)" stroke-width="1"></line>
-      <text x="${left - 10}" y="${y + 4}" text-anchor="end" fill="var(--text-subtle)" font-size="11">${v}</text>`;
+      <text x="${left - 10}" y="${y + 4}" text-anchor="end" fill="var(--text-subtle)" font-size="11">${v}</text>
+      ${hasTemperature ? `<text x="${width - right + 10}" y="${y + 4}" fill="var(--text-subtle)" font-size="11">${v / 100 * temperatureMax}</text>` : ''}`;
   }).join('');
   const xLabels = [minT, minT + span / 2, maxT].map((ts, i) => {
     const x = i === 0 ? left : i === 2 ? width - right : xFor(ts);
@@ -2513,18 +2566,30 @@ function renderHistory(data) {
     return `<text x="${x}" y="${height - 10}" text-anchor="${anchor}" fill="var(--text-subtle)" font-size="11">${formatHistoryTime(ts)}</text>`;
   }).join('');
   const lines = series.map(def => {
-    const coords = points
-      .filter(p => Number.isFinite(Number(p.timestamp)) && Number.isFinite(Number(p[def.key])))
-      .map(p => `${xFor(p.timestamp).toFixed(1)},${yFor(p[def.key]).toFixed(1)}`);
-    if (coords.length === 1) {
-      const [x, y] = coords[0].split(',');
-      return `<circle cx="${x}" cy="${y}" r="3" fill="${def.color}"></circle>`;
-    }
-    return `<polyline points="${coords.join(' ')}" fill="none" stroke="${def.color}" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"></polyline>`;
+    const segments = [];
+    let coords = [];
+    points.forEach(p => {
+      const value = historyValue(p, def.key);
+      if (!Number.isFinite(historyValue(p, 'timestamp')) || !Number.isFinite(value)) {
+        if (coords.length) segments.push(coords);
+        coords = [];
+        return;
+      }
+      coords.push(`${xFor(p.timestamp).toFixed(1)},${yFor(value, def).toFixed(1)}`);
+    });
+    if (coords.length) segments.push(coords);
+    return segments.map(segment => {
+      if (segment.length === 1) {
+        const [x, y] = segment[0].split(',');
+        return `<circle cx="${x}" cy="${y}" r="3" fill="${def.color}"></circle>`;
+      }
+      return `<polyline points="${segment.join(' ')}" fill="none" stroke="${def.color}" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"></polyline>`;
+    }).join('');
   }).join('');
   const latest = points[points.length - 1] || {};
   const legend = series.map(def => {
-    const value = Number.isFinite(Number(latest[def.key])) ? `${Number(latest[def.key]).toFixed(1)}%` : 'N/A';
+    const number = historyValue(latest, def.key);
+    const value = Number.isFinite(number) ? `${number.toFixed(1)}${def.unit}` : 'N/A';
     return `<span class="history-legend-item"><span class="history-dot" style="background:${def.color}"></span>${def.label}: ${value}</span>`;
   }).join('');
 
@@ -2532,6 +2597,8 @@ function renderHistory(data) {
     <svg id="history-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="历史趋势图">
       <rect x="${left}" y="${top}" width="${plotW}" height="${plotH}" fill="transparent"></rect>
       ${grid}
+      <text x="${left - 10}" y="14" text-anchor="end" fill="var(--text-subtle)" font-size="11">%</text>
+      ${hasTemperature ? `<text x="${width - right + 10}" y="14" fill="var(--text-subtle)" font-size="11">°C</text>` : ''}
       ${xLabels}
       ${lines}
       <g class="history-hover" id="history-hover-group">
